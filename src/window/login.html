@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Entrar na Capi</title>
+    <title>Sign in to Capi</title>
     <style>
       :root {
         --purple: #7c5cff;
@@ -81,25 +81,25 @@
       <img src="../../assets/capi-mascote.png" alt="Capi" />
       <b>Capi</b>
     </div>
-    <h1>Entre pra usar a Capi</h1>
-    <p class="sub">Você tem 20 envios grátis pra testar.</p>
+    <h1>Sign in to use Capi</h1>
+    <p class="sub">You get 20 free sends to try it out.</p>
 
     <form id="form">
-      <label for="email">E-mail</label>
-      <input id="email" type="email" placeholder="voce@email.com" autocomplete="email" required />
+      <label for="email">Email</label>
+      <input id="email" type="email" placeholder="you@email.com" autocomplete="email" required />
 
-      <label for="password">Senha</label>
-      <input id="password" type="password" placeholder="sua senha" autocomplete="current-password" required />
+      <label for="password">Password</label>
+      <input id="password" type="password" placeholder="your password" autocomplete="current-password" required />
 
-      <button class="primary" id="submit" type="submit">Entrar</button>
+      <button class="primary" id="submit" type="submit">Sign in</button>
       <div class="err" id="err"></div>
     </form>
 
     <div class="links">
-      Ainda não tem conta? <a id="signup">Criar conta grátis</a>
+      Don't have an account yet? <a id="signup">Create a free account</a>
     </div>
     <div class="links cancel">
-      <a id="cancel">Agora não</a>
+      <a id="cancel">Not now</a>
     </div>
 
     <script>
@@ -107,7 +107,7 @@
       const btn = document.getElementById("submit");
       const err = document.getElementById("err");
       function showErr(msg) {
-        err.textContent = msg || "Não consegui entrar. Confira e tente de novo.";
+        err.textContent = msg || "Couldn't sign in. Check your details and try again.";
         err.classList.add("show");
       }
       form.addEventListener("submit", async (e) => {
@@ -117,16 +117,16 @@
         const password = document.getElementById("password").value;
         if (!email || !password) return;
         btn.disabled = true;
-        btn.textContent = "Entrando…";
+        btn.textContent = "Signing in…";
         try {
           const res = await window.capiLogin.submit(email, password);
           if (res && res.ok) return; // janela fecha pelo main
           showErr(res && res.error);
         } catch (_e) {
-          showErr("Sem conexão. Tente de novo.");
+          showErr("No connection. Try again.");
         }
         btn.disabled = false;
-        btn.textContent = "Entrar";
+        btn.textContent = "Sign in";
       });
       document.getElementById("signup").addEventListener("click", () => window.capiLogin.signup());
       document.getElementById("cancel").addEventListener("click", () => window.capiLogin.cancel());

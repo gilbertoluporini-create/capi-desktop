@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Configurar a Capi</title>
+    <title>Set up Capi</title>
     <style>
       :root {
         --purple: #7c5cff;
@@ -119,60 +119,60 @@
 
     <!-- PASSO 1: escolher destino -->
     <div class="step" id="step-pick">
-      <h1>Pra onde mandar seu contexto?</h1>
-      <p class="sub">Escolha o app que vai receber sua captura + texto.</p>
+      <h1>Where do you want to send your context?</h1>
+      <p class="sub">Pick the app that will receive your capture + text.</p>
       <div class="options">
         <button class="opt reco" data-bid="com.anthropic.claudefordesktop">
           <span class="ico">✨</span>
           <span class="txt">
             <span class="ttl">★ Claude Desktop</span>
-            <span class="desc">mais fácil, funciona na hora</span>
+            <span class="desc">easiest, works right away</span>
           </span>
-          <span class="badge">RECOMENDADO</span>
+          <span class="badge">RECOMMENDED</span>
         </button>
         <button class="opt" data-bid="com.microsoft.VSCode">
           <span class="ico">🧑‍💻</span>
           <span class="txt">
             <span class="ttl">VS Code</span>
-            <span class="desc">pra programar (Claude Code)</span>
+            <span class="desc">for coding (Claude Code)</span>
           </span>
         </button>
         <button class="opt" data-bid="com.todesktop.230313mzl4w4u92">
           <span class="ico">⌨️</span>
           <span class="txt">
             <span class="ttl">Cursor</span>
-            <span class="desc">pra programar</span>
+            <span class="desc">for coding</span>
           </span>
         </button>
         <button class="opt" data-other="1">
           <span class="ico">➕</span>
           <span class="txt">
-            <span class="ttl">Outro app</span>
-            <span class="desc">escolher manualmente nas configurações</span>
+            <span class="ttl">Another app</span>
+            <span class="desc">pick manually in settings</span>
           </span>
         </button>
       </div>
-      <div class="skip"><a id="skip1">Pular por agora</a></div>
+      <div class="skip"><a id="skip1">Skip for now</a></div>
     </div>
 
     <!-- PASSO 2: app NÃO instalado (guia) -->
     <div class="step hidden" id="step-missing">
-      <h1 id="missing-title">Instalar o app</h1>
+      <h1 id="missing-title">Install the app</h1>
       <p class="sub" id="missing-sub"></p>
       <div class="guide" id="missing-guide"></div>
-      <button class="primary" id="missing-download">Baixar</button>
-      <button class="ghost" id="missing-continue">Já instalei, continuar</button>
+      <button class="primary" id="missing-download">Download</button>
+      <button class="ghost" id="missing-continue">I already installed it, continue</button>
       <div id="missing-claude-alt" style="width:100%"></div>
-      <div class="back"><a id="missing-back">‹ Voltar</a></div>
+      <div class="back"><a id="missing-back">‹ Back</a></div>
     </div>
 
     <!-- PASSO 3: tudo pronto -->
     <div class="step hidden" id="step-done">
       <div class="done-emoji">🎉</div>
-      <h1>Tudo pronto!</h1>
-      <p class="sub" id="done-sub">Seu destino está configurado.</p>
-      <p class="sub">Aperte <span class="kbd">⌘ ⇧ 2</span> em qualquer tela pra mandar pro seu agente.</p>
-      <button class="primary" id="done-close">Começar a usar</button>
+      <h1>All set!</h1>
+      <p class="sub" id="done-sub">Your destination is configured.</p>
+      <p class="sub">Press <span class="kbd">⌘ ⇧ 2</span> on any screen to send to your agent.</p>
+      <button class="primary" id="done-close">Start using it</button>
     </div>
 
     <script>
@@ -195,14 +195,14 @@
         [CLAUDE]: {
           name: "Claude Desktop",
           download: "https://claude.ai/download",
-          guide: { h: "Baixe o Claude Desktop", steps: ["Abra o link de download.", "Instale e faça login na sua conta Claude.", "Volte aqui e clique em \"Já instalei\"."] },
+          guide: { h: "Download Claude Desktop", steps: ["Open the download link.", "Install and sign in to your Claude account.", "Come back here and click \"I already installed it\"."] },
         },
         [VSCODE]: {
           name: "VS Code",
           download: "https://code.visualstudio.com/download",
           guide: {
-            h: "Instalar VS Code + Claude Code",
-            steps: ["Baixe e instale o VS Code.", "Instale a extensão \"Claude Code\".", "Volte aqui e clique em \"Já instalei\"."],
+            h: "Install VS Code + Claude Code",
+            steps: ["Download and install VS Code.", "Install the \"Claude Code\" extension.", "Come back here and click \"I already installed it\"."],
             ext: "https://marketplace.visualstudio.com/items?itemName=anthropic.claude-code",
             claudeAlt: true,
           },
@@ -210,7 +210,7 @@
         [CURSOR]: {
           name: "Cursor",
           download: "https://cursor.com",
-          guide: { h: "Instalar Cursor", steps: ["Baixe e instale o Cursor.", "Abra e ative o Claude dentro dele.", "Volte aqui e clique em \"Já instalei\"."] },
+          guide: { h: "Install Cursor", steps: ["Download and install Cursor.", "Open it and enable Claude inside.", "Come back here and click \"I already installed it\"."] },
         },
       };
 
@@ -222,7 +222,7 @@
         if (res && res.installed) {
           await ob.setDefault(bid);
           document.getElementById("done-sub").textContent =
-            "Pronto! Suas capturas vão direto pro " + (res.name || APPS[bid].name) + ".";
+            "Done! Your captures go straight to " + (res.name || APPS[bid].name) + ".";
           show("done");
         } else {
           renderMissing(bid);
@@ -234,14 +234,14 @@
         const a = APPS[bid];
         document.getElementById("missing-title").textContent = a.guide.h;
         document.getElementById("missing-sub").textContent =
-          "Parece que o " + a.name + " ainda não está instalado.";
+          "Looks like " + a.name + " isn't installed yet.";
         // guia
         const g = document.getElementById("missing-guide");
         let html = "<h3>" + a.guide.h + "</h3><ol>";
         for (const s of a.guide.steps) html += "<li>" + s + "</li>";
         html += "</ol>";
         if (a.guide.ext) {
-          html += '<p style="margin:8px 0 0"><a id="ext-link">Abrir a extensão Claude Code ›</a></p>';
+          html += '<p style="margin:8px 0 0"><a id="ext-link">Open the Claude Code extension ›</a></p>';
         }
         g.innerHTML = html;
         if (a.guide.ext) {
@@ -249,14 +249,14 @@
         }
         // botão baixar
         const dl = document.getElementById("missing-download");
-        dl.textContent = "Baixar " + a.name;
+        dl.textContent = "Download " + a.name;
         dl.onclick = () => ob.openExternal(a.download);
         // continuar (re-checa instalação)
         document.getElementById("missing-continue").onclick = () => choose(bid);
         // destaque "ou use o Claude Desktop" (VS Code/Cursor ausentes)
         const alt = document.getElementById("missing-claude-alt");
         if (bid !== CLAUDE) {
-          alt.innerHTML = '<button class="ghost" id="alt-claude" style="border-color:var(--purple);color:var(--purple-deep)">★ ou, mais fácil agora: usar o Claude Desktop</button>';
+          alt.innerHTML = '<button class="ghost" id="alt-claude" style="border-color:var(--purple);color:var(--purple-deep)">★ or, easier right now: use Claude Desktop</button>';
           document.getElementById("alt-claude").onclick = () => choose(CLAUDE);
         } else {
           alt.innerHTML = "";

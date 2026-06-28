@@ -91,8 +91,8 @@ function renderApps(s) {
   (s.config.apps || []).forEach((app) => {
     const n =
       app.type === "messenger"
-        ? (s.config.contacts || []).filter((c) => c.appBundleId === app.bundleId).length + " contatos"
-        : (s.config.agents || []).filter((a) => a.app && a.app.bundleId === app.bundleId).length + " agentes";
+        ? (s.config.contacts || []).filter((c) => c.appBundleId === app.bundleId).length + " contacts"
+        : (s.config.agents || []).filter((a) => a.app && a.app.bundleId === app.bundleId).length + " agents";
     const div = document.createElement("div");
     div.className = "app-item";
     div.innerHTML =
@@ -102,7 +102,7 @@ function renderApps(s) {
     div.querySelector(".agent-ico").innerHTML = avatarHTML(app.avatar || "grid", 20);
     div.querySelector("b").textContent = app.name;
     div.querySelector("small").textContent =
-      (app.type === "messenger" ? "Mensageiro · " : "IA/código · ") + n;
+      (app.type === "messenger" ? "Messenger · " : "AI/code · ") + n;
     div.addEventListener("click", () => { currentApp = app.bundleId; render(lastState); });
     list.appendChild(div);
   });
@@ -115,14 +115,14 @@ function renderAppScreen(s) {
   $("app-head-ico").innerHTML = avatarHTML(app.avatar || "grid", 22);
   $("app-head-ico").style.background = app.color || "#7c5cff";
   $("app-head-name").textContent = app.name;
-  $("app-head-type").textContent = app.type === "messenger" ? "Mensageiro" : "IA / código";
+  $("app-head-type").textContent = app.type === "messenger" ? "Messenger" : "AI / code";
   $("app-search").checked = !!app.searchEnabled;
 
   const box = $("app-children");
 
   if (app.type === "messenger") {
     $("addChild").hidden = false;
-    $("addChild").textContent = "+ Adicionar contato";
+    $("addChild").textContent = "+ Add contact";
     $("addProject").hidden = true;
     $("seedFrentes").hidden = true;
     const def = s.config.captureDefault || "__last__";
@@ -135,16 +135,16 @@ function renderAppScreen(s) {
         `<span class="agent-ico" style="background:${app.color}">${capiIcon("person", 18)}</span>` +
         `<div class="agent-txt"><b></b><small></small></div>` +
         `<input type="radio" name="cdef" class="radio" ${def === c.id ? "checked" : ""} />` +
-        `<button class="agent-rm" title="Remover">${capiIcon("close", 14)}</button>`;
+        `<button class="agent-rm" title="Remove">${capiIcon("close", 14)}</button>`;
       div.querySelector("b").textContent = c.name;
       div.querySelector("small").textContent = c.hint || "";
       div.querySelector(".radio").addEventListener("change", () => window.capiWin.setAgentDefault(c.id));
       div.querySelector(".agent-rm").addEventListener("click", () => {
-        if (confirm(`Remover "${c.name}"?`)) window.capiWin.removeContact(c.id);
+        if (confirm(`Remove "${c.name}"?`)) window.capiWin.removeContact(c.id);
       });
       box.appendChild(div);
     });
-    if (!cts.length) box.innerHTML = `<p class="empty-sm">Nenhum contato ainda.</p>`;
+    if (!cts.length) box.innerHTML = `<p class="empty-sm">No contacts yet.</p>`;
     return;
   }
 
@@ -152,7 +152,7 @@ function renderAppScreen(s) {
   $("addChild").hidden = true;
   $("addProject").hidden = false;
   $("seedFrentes").hidden = false;
-  if (!box.children.length) box.innerHTML = `<p class="empty-sm">Carregando projetos…</p>`;
+  if (!box.children.length) box.innerHTML = `<p class="empty-sm">Loading projects…</p>`;
   window.capiWin.listProjects(app.bundleId).then((projs) => {
     projectsCache = projs || [];
     if (currentApp !== app.bundleId || currentProject) return; // mudou de tela
@@ -168,7 +168,7 @@ function projectRow(app, p) {
   div.innerHTML =
     `<span class="agent-ico" style="background:${app.color || "#7c5cff"}"></span>` +
     `<div class="agent-txt"><b></b><small></small></div>` +
-    `<button class="proj-arch" title="${p.archived ? "Desarquivar" : "Arquivar"}">${p.archived ? capiIcon("back", 16) : capiIcon("archive", 16)}</button>` +
+    `<button class="proj-arch" title="${p.archived ? "Unarchive" : "Archive"}">${p.archived ? capiIcon("back", 16) : capiIcon("archive", 16)}</button>` +
     `<span class="chev">${capiIcon("chevronRight", 18)}</span>`;
   div.querySelector(".agent-ico").innerHTML = avatarHTML(p.here ? "target" : "grid", 18);
   div.querySelector("b").textContent = p.name;
@@ -208,14 +208,14 @@ function paintProjects(app) {
 
   frentes.forEach((p) => box.appendChild(projectRow(app, p)));
   if (!frentes.length)
-    box.insertAdjacentHTML("beforeend", `<p class="empty-sm">Nenhuma frente ainda. Abra um chat importado e crie um agente nele.</p>`);
+    box.insertAdjacentHTML("beforeend", `<p class="empty-sm">No workstreams yet. Open an imported chat and create an agent in it.</p>`);
 
   if (imported.length) {
-    box.appendChild(groupHeader(`Chats importados (${imported.length})`, importedOpen, () => { importedOpen = !importedOpen; paintProjects(app); }));
+    box.appendChild(groupHeader(`Imported chats (${imported.length})`, importedOpen, () => { importedOpen = !importedOpen; paintProjects(app); }));
     if (importedOpen) imported.forEach((p) => box.appendChild(projectRow(app, p)));
   }
   if (archived.length) {
-    box.appendChild(groupHeader(`Arquivados (${archived.length})`, archivedOpen, () => { archivedOpen = !archivedOpen; paintProjects(app); }));
+    box.appendChild(groupHeader(`Archived (${archived.length})`, archivedOpen, () => { archivedOpen = !archivedOpen; paintProjects(app); }));
     if (archivedOpen) archived.forEach((p) => box.appendChild(projectRow(app, p)));
   }
 }
@@ -240,7 +240,7 @@ function paintProjectAgents(s, app, proj) {
   $("proj-head-name").textContent = proj.name;
   if (proj.here) {
     $("proj-head-sub").innerHTML =
-      `<svg width="9" height="9" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:5px"><circle cx="12" cy="12" r="9" fill="#22C55E"/></svg>você está aqui · <span class="phs-app"></span>`;
+      `<svg width="9" height="9" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:5px"><circle cx="12" cy="12" r="9" fill="#22C55E"/></svg>you're here · <span class="phs-app"></span>`;
     $("proj-head-sub").querySelector(".phs-app").textContent = app.name;
   } else {
     $("proj-head-sub").textContent = app.name;
@@ -258,11 +258,11 @@ function paintProjectAgents(s, app, proj) {
     div.innerHTML =
       `<span class="agent-ico" style="background:${a.color || "#7c5cff"}"></span>` +
       `<div class="agent-txt"><b></b><small></small></div>` +
-      (canLaunch ? `<button class="agent-go" title="Abrir frente (janela + Claude Code + prompt)">${capiIcon("play", 15)}</button>` : ``) +
-      `<button class="agent-pin ${isPinned ? "on" : ""}" title="${isPinned ? "Desafixar" : "Fixar no topo do picker"}">${isPinned ? capiIcon("pinFilled", 16) : capiIcon("star", 16)}</button>` +
-      `<input type="radio" name="cdef" class="radio" ${def === a.id ? "checked" : ""} title="Destino padrão" />` +
-      `<button class="agent-edit" title="Editar">${capiIcon("edit", 15)}</button>` +
-      `<button class="agent-rm" title="Remover">${capiIcon("close", 15)}</button>`;
+      (canLaunch ? `<button class="agent-go" title="Open workstream (window + Claude Code + prompt)">${capiIcon("play", 15)}</button>` : ``) +
+      `<button class="agent-pin ${isPinned ? "on" : ""}" title="${isPinned ? "Unpin" : "Pin to the top of the picker"}">${isPinned ? capiIcon("pinFilled", 16) : capiIcon("star", 16)}</button>` +
+      `<input type="radio" name="cdef" class="radio" ${def === a.id ? "checked" : ""} title="Default destination" />` +
+      `<button class="agent-edit" title="Edit">${capiIcon("edit", 15)}</button>` +
+      `<button class="agent-rm" title="Remove">${capiIcon("close", 15)}</button>`;
     div.querySelector(".agent-ico").innerHTML = avatarHTML(a.avatar || "robot", 18);
     div.querySelector("b").textContent = a.name;
     div.querySelector("small").textContent = a.sub || "";
@@ -275,12 +275,12 @@ function paintProjectAgents(s, app, proj) {
     div.querySelector(".radio").addEventListener("change", () => window.capiWin.setAgentDefault(a.id));
     div.querySelector(".agent-edit").addEventListener("click", () => openAgentEditor(app, full));
     div.querySelector(".agent-rm").addEventListener("click", () => {
-      if (confirm(`Remover o agente "${a.name}"?`)) window.capiWin.removeAgent(a.id);
+      if (confirm(`Remove the agent "${a.name}"?`)) window.capiWin.removeAgent(a.id);
     });
     box.appendChild(div);
   });
   if (!(proj.agents || []).length)
-    box.innerHTML = `<p class="empty-sm">Só "Conversa atual" por enquanto. Crie um agente abaixo.</p>`;
+    box.innerHTML = `<p class="empty-sm">Just "Current conversation" for now. Create an agent below.</p>`;
 }
 
 function slug(s) {
@@ -321,19 +321,19 @@ function renderAimLabel() {
   const el = $("ae-aim-label");
   const aimIco = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.6"/></svg>`;
   if (aeWindowTitle) {
-    el.innerHTML = `Mirando: <b></b>`;
+    el.innerHTML = `Aiming at: <b></b>`;
     el.querySelector("b").textContent = aeWindowTitle;
-    $("ae-aim").innerHTML = aimIco + "Re-mirar a janela ativa";
+    $("ae-aim").innerHTML = aimIco + "Re-aim at the active window";
   } else {
-    el.textContent = "Deixe o chat certo na frente no VS Code, depois clique aqui.";
-    $("ae-aim").innerHTML = aimIco + "Mirar a janela ativa do VS Code";
+    el.textContent = "Bring the right chat to the front in VS Code, then click here.";
+    $("ae-aim").innerHTML = aimIco + "Aim at the active VS Code window";
   }
 }
 
 function openAgentEditor(app, agent, preset) {
   aeApp = app; aeAgent = agent || null; aePreset = preset || null;
   const projName = (preset && preset.projectName) || (agent && agent.project && agent.project.name) || "";
-  $("ae-title").textContent = (agent ? "Editar agente" : "Novo agente") + (projName ? ` · ${projName}` : "");
+  $("ae-title").textContent = (agent ? "Edit agent" : "New agent") + (projName ? ` · ${projName}` : "");
   $("ae-name").value = agent ? agent.name : "";
   $("ae-subject").value = agent ? agent.subject || "" : "";
   pickAvatar = (agent && agent.avatar) || AVATARS[0];
@@ -401,7 +401,7 @@ async function openAppPicker() {
   apType = "ai";
   document.querySelectorAll("#ap-seg .seg-btn").forEach((b) => b.classList.toggle("active", b.dataset.type === "ai"));
   const sel = $("ap-app");
-  sel.innerHTML = `<option value="">carregando…</option>`;
+  sel.innerHTML = `<option value="">loading…</option>`;
   const apps = await window.capiWin.listRunningApps();
   const have = new Set((lastState.config.apps || []).map((a) => a.bundleId));
   sel.innerHTML = "";
@@ -448,8 +448,8 @@ function startCaptureShortcut(which, btn) {
   if (capturingShortcut) stopCaptureShortcut();
   capturingShortcut = which;
   btn.classList.add("capturing");
-  btn.textContent = "Tecle…";
-  scHint("Pressione a combinação (⌘/⌥/⌃/⇧ + tecla). Esc cancela.", false);
+  btn.textContent = "Press…";
+  scHint("Press the combination (⌘/⌥/⌃/⇧ + key). Esc cancels.", false);
 }
 function stopCaptureShortcut() {
   const prev = capturingShortcut;
@@ -467,15 +467,15 @@ window.addEventListener("keydown", async (e) => {
   e.stopPropagation();
   if (e.code === "Escape") { stopCaptureShortcut(); scHint("", false); return; }
   const r = accelFromEvent(e);
-  if (r.needMod) { scHint("Falta um modificador (⌘, ⌥, ⌃ ou ⇧).", true); return; }
+  if (r.needMod) { scHint("Add a modifier (⌘, ⌥, ⌃ or ⇧).", true); return; }
   if (r.needKey) return; // ainda só apertou modificadores — espera a tecla
   const which = stopCaptureShortcut();
   const res = await window.capiWin.setShortcut(which, r.accel);
   if (res && res.ok) {
-    scHint("Atalho salvo: " + fmtAccel(r.accel), false);
+    scHint("Shortcut saved: " + fmtAccel(r.accel), false);
     setTimeout(() => scHint("", false), 2500);
   } else {
-    scHint((res && res.reason) || "Não consegui usar esse atalho.", true);
+    scHint((res && res.reason) || "Couldn't use that shortcut.", true);
   }
 }, true);
 
@@ -487,7 +487,7 @@ $("app-search").addEventListener("change", (e) => {
 });
 $("removeApp").addEventListener("click", () => {
   const app = appByBundle(lastState, currentApp);
-  if (app && confirm(`Remover o app "${app.name}" e seus destinos?`)) {
+  if (app && confirm(`Remove the app "${app.name}" and its destinations?`)) {
     window.capiWin.removeApp(app.bundleId); currentApp = null; currentProject = null;
   }
 });
@@ -500,7 +500,7 @@ $("addChild").addEventListener("click", () => {
 $("addProject").addEventListener("click", () => {
   const app = appByBundle(lastState, currentApp);
   if (!app) return;
-  const name = (prompt("Nome do projeto (ex.: a pasta/janela que ele mira):") || "").trim();
+  const name = (prompt("Project name (e.g. the folder/window it aims at):") || "").trim();
   if (!name) return;
   window.capiWin.saveProject({
     id: "mnl-" + slug(name) + "-" + uid(), key: "mnl:" + slug(name),
@@ -508,11 +508,11 @@ $("addProject").addEventListener("click", () => {
   });
 });
 $("seedFrentes").addEventListener("click", async (e) => {
-  const btn = e.currentTarget; btn.disabled = true; btn.textContent = "Criando…";
+  const btn = e.currentTarget; btn.disabled = true; btn.textContent = "Creating…";
   const r = await window.capiWin.seedCapiFrentes();
   btn.disabled = false;
-  btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polygon points="13 2 4 14 12 14 11 22 20 10 12 10 13 2"/></svg>Criar as 5 frentes da Capi`;
-  alert(r && r.created ? `${r.created} frente(s) criada(s)! Abra um projeto pra ver, ou use o botão de abrir frente.` : "As frentes já existem.");
+  btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polygon points="13 2 4 14 12 14 11 22 20 10 12 10 13 2"/></svg>Create Capi's 5 workstreams`;
+  alert(r && r.created ? `${r.created} workstream(s) created! Open a project to see them, or use the open-workstream button.` : "The workstreams already exist.");
 });
 
 // nível 3 (projeto)
@@ -537,7 +537,7 @@ $("ae-aim").addEventListener("click", async () => {
   const t = await window.capiWin.grabActiveWindow(aeApp ? aeApp.bundleId : "com.microsoft.VSCode");
   btn.disabled = false;
   if (t) { aeWindowTitle = t; renderAimLabel(); }
-  else $("ae-aim-label").textContent = "Não consegui ler a janela ativa. O VS Code está aberto?";
+  else $("ae-aim-label").textContent = "Couldn't read the active window. Is VS Code open?";
 });
 $("ce-cancel").addEventListener("click", () => ($("contact-editor").hidden = true));
 $("ce-save").addEventListener("click", saveContactForm);

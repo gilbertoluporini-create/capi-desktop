@@ -147,7 +147,7 @@ function flattenDestinations() {
         })
       );
       if (!cts.length)
-        out.push({ id: app.id, name: app.name, subject: "conversa atual", avatar: app.avatar || "message", color: app.color, bundleId: app.bundleId, windowMatch: null });
+        out.push({ id: app.id, name: app.name, subject: "current conversation", avatar: app.avatar || "message", color: app.color, bundleId: app.bundleId, windowMatch: null });
     } else if (mine.length) {
       mine.forEach((a) =>
         out.push({
@@ -158,7 +158,7 @@ function flattenDestinations() {
         })
       );
     } else {
-      out.push({ id: app.id, name: app.name, subject: "conversa atual", avatar: app.avatar, color: app.color, bundleId: app.bundleId, windowMatch: null });
+      out.push({ id: app.id, name: app.name, subject: "current conversation", avatar: app.avatar, color: app.color, bundleId: app.bundleId, windowMatch: null });
     }
   });
   return out;
@@ -169,7 +169,7 @@ function appContacts(app) {
   return (config.contacts || [])
     .filter((c) => c.appBundleId === app.bundleId)
     .map((c) => ({
-      id: c.id, name: c.name, sub: c.hint || "contato",
+      id: c.id, name: c.name, sub: c.hint || "contact",
       avatar: app.avatar, color: app.color,
       bundleId: app.bundleId, windowMatch: null, kind: "contact",
     }));
@@ -202,7 +202,7 @@ function appProjects(app) {
   // nome = título do chat (aiTitle, igual ao VS Code); pasta vai no subtítulo
   if (isCC) {
     for (const p of claudeProjectsCache) {
-      const conv = `${p.sessions} conversa${p.sessions > 1 ? "s" : ""}`;
+      const conv = `${p.sessions} conversation${p.sessions > 1 ? "s" : ""}`;
       map.set(p.cwd, {
         id: "cwd:" + p.cwd, key: p.cwd,
         name: p.title || p.name,
@@ -231,12 +231,12 @@ function appProjects(app) {
       if (!proj) {
         proj =
           key === "__geral__"
-            ? { id: "geral:" + app.bundleId, key, name: "Geral", sub: "sem projeto", windowMatch: null, cwd: "", agents: [] }
-            : { id: "k:" + key, key, name: (a.project && a.project.name) || a.windowMatch || "Projeto", sub: "", windowMatch: a.windowMatch || null, cwd: a.cwd || "", agents: [] };
+            ? { id: "geral:" + app.bundleId, key, name: "General", sub: "no project", windowMatch: null, cwd: "", agents: [] }
+            : { id: "k:" + key, key, name: (a.project && a.project.name) || a.windowMatch || "Project", sub: "", windowMatch: a.windowMatch || null, cwd: a.cwd || "", agents: [] };
         map.set(key, proj);
       }
       proj.agents.push({
-        id: a.id, name: a.name, sub: a.subject || "agente",
+        id: a.id, name: a.name, sub: a.subject || "agent",
         avatar: a.avatar || app.avatar, color: a.color || app.color,
         bundleId: app.bundleId,
         windowMatch: a.windowMatch || proj.windowMatch || null,
@@ -259,10 +259,10 @@ function appProjects(app) {
   }
   const archived = new Set(config.archivedProjects || []);
   arr.forEach((p) => {
-    if (!p.sub) p.sub = p.agents.length ? `${p.agents.length} agente${p.agents.length > 1 ? "s" : ""}` : "conversa atual";
+    if (!p.sub) p.sub = p.agents.length ? `${p.agents.length} agent${p.agents.length > 1 ? "s" : ""}` : "current conversation";
     p.archived = archived.has(p.key);
     p.here = !!hereKey && p.key === hereKey;
-    if (p.here) p.sub = "você está aqui · " + p.sub;
+    if (p.here) p.sub = "you're here · " + p.sub;
   });
   // ordena: "aqui" primeiro, depois com agentes, depois por nome
   arr.sort((a, b) =>
@@ -584,8 +584,8 @@ function hasScreenPermission() {
 
 function promptScreenPermission() {
   const n = new Notification({
-    title: "Capi precisa de permissão",
-    body: "Ative a Gravação de Tela pra Capi nas Configurações do Sistema e reabra o app.",
+    title: "Capi needs permission",
+    body: "Enable Screen Recording for Capi in System Settings and reopen the app.",
   });
   n.show();
   // abre direto a aba de Gravação de Tela
@@ -1088,7 +1088,7 @@ const sh = (cmd, args) => new Promise((res) => execFile(cmd, args, () => res()))
 // nome curto do projeto a partir do que a pessoa falou
 function makeProjectName(note) {
   const t = (note || "").replace(/\s+/g, " ").trim();
-  if (!t) return "Novo projeto";
+  if (!t) return "New project";
   const words = t.split(" ").slice(0, 6).join(" ");
   return words.length > 42 ? words.slice(0, 42).trim() + "…" : words;
 }
@@ -1100,7 +1100,7 @@ function createCapiProjectWithOrchestrator(name) {
   config.projects.push({ id: key, key, name, appBundleId: "com.microsoft.VSCode", windowMatch: null, cwd });
   config.agents = config.agents || [];
   config.agents.push({
-    id: "orq-" + key, name: "Orquestrador", subject: "cara que sabe de tudo",
+    id: "orq-" + key, name: "Orchestrator", subject: "the one who knows everything",
     avatar: "capi:orquestrador", color: "#7c5cff",
     app: { bundleId: "com.microsoft.VSCode" }, project: { key, name },
     windowMatch: null, kind: "agent",
@@ -1193,7 +1193,7 @@ async function findEditorCli(bundleId) {
 // abre a frente: janela nova na pasta, abre o Claude Code (⌘+Esc), cola o briefing e envia
 async function launchFrente(agentId) {
   const a = (config.agents || []).find((x) => x.id === agentId);
-  if (!a) return { ok: false, error: "agente não encontrado" };
+  if (!a) return { ok: false, error: "agent not found" };
   const folder = a.folder || a.cwd || os.homedir();
   const bundleId = (a.app && a.app.bundleId) || "com.microsoft.VSCode";
   flog(`launchFrente: ${a.name} -> ${folder}`);
@@ -1235,10 +1235,10 @@ function seedCapiFrentes() {
   }
   const CAPPROJ = { key: CAPKEY, name: "Capi" };
   const FRENTES = [
-    { id: "capi-desktop", name: "Capi-Desktop", subject: "Código do app (Electron)", avatar: "capi:desktop", color: "#5b3fd6", folder: path.join(root, "desktop"), wm: "desktop", brief: "briefing-desktop.md" },
-    { id: "capi-web", name: "Capi-Web", subject: "Site, auth e dashboard", avatar: "capi:web", color: "#06b6d4", folder: path.join(root, "web"), wm: "web", brief: "briefing-web.md" },
-    { id: "capi-marca", name: "Capi-Marca", subject: "Marca e divulgação", avatar: "capi:marca", color: "#ef4444", folder: path.join(root, "assets"), wm: "assets", brief: "briefing-marca.md" },
-    { id: "capi-qa", name: "Capi-QA", subject: "Testes e qualidade", avatar: "capi:qa", color: "#22c55e", folder: root, wm: "cap", brief: "" },
+    { id: "capi-desktop", name: "Capi-Desktop", subject: "App code (Electron)", avatar: "capi:desktop", color: "#5b3fd6", folder: path.join(root, "desktop"), wm: "desktop", brief: "briefing-desktop.md" },
+    { id: "capi-web", name: "Capi-Web", subject: "Site, auth and dashboard", avatar: "capi:web", color: "#06b6d4", folder: path.join(root, "web"), wm: "web", brief: "briefing-web.md" },
+    { id: "capi-marca", name: "Capi-Brand", subject: "Brand and marketing", avatar: "capi:marca", color: "#ef4444", folder: path.join(root, "assets"), wm: "assets", brief: "briefing-marca.md" },
+    { id: "capi-qa", name: "Capi-QA", subject: "Tests and quality", avatar: "capi:qa", color: "#22c55e", folder: root, wm: "cap", brief: "" },
   ];
   config.agents = config.agents || [];
   let created = 0, dirty = true; // projeto-container já pode ter sido adicionado
@@ -1250,7 +1250,7 @@ function seedCapiFrentes() {
       kind: "project", target: "window",
       windowMatch: f.wm, cwd: f.folder, folder: f.folder, // alvo = janela própria
       project: CAPPROJ,                                    // agrupamento = projeto "Capi"
-      initPrompt: readBrief(f.brief) || `Você é o ${f.name}, uma das frentes do projeto Capi. Leia ~/cap/CLAUDE.md, ~/cap/ESTADO.md e ~/cap/COORDINATION.md antes de tudo.`,
+      initPrompt: readBrief(f.brief) || `You are ${f.name}, one of the workstreams of the Capi project. Read ~/cap/CLAUDE.md, ~/cap/ESTADO.md and ~/cap/COORDINATION.md before anything else.`,
     });
     created++;
   }
@@ -1308,8 +1308,8 @@ const WEB_URL =
 const SUPABASE_URL = "https://xvwzkvligwpntzjmyqkm.supabase.co";
 const SUPABASE_ANON =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh2d3prdmxpZ3dwbnR6am15cWttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0MDM2OTYsImV4cCI6MjA5Nzk3OTY5Nn0.QCLc1V3X8AP_GpMWYJWVC4y_P0XXk0hwTFJAeY2utGc";
-// Payment Link Stripe (Founding R$97). client_reference_id = user_id do Supabase.
-const FOUNDING_LINK = "https://buy.stripe.com/28EdR36QO9E7b8Ge67dby00";
+// Stripe Payment Link (Pro $12.99/month). client_reference_id = Supabase user_id.
+const PRO_PAY_LINK = "https://buy.stripe.com/9B69AN2AybMf4KibXZdby01";
 
 // session = { access_token, refresh_token, user_id, email }
 function getSession() {
@@ -1345,7 +1345,7 @@ async function supabaseLogin(email, password) {
     if (!r.ok || !j || !j.access_token) {
       const msg =
         (j && (j.error_description || j.msg || j.error || j.message)) ||
-        `Falha no login (${r.status})`;
+        `Login failed (${r.status})`;
       flog("login falhou: HTTP " + r.status + " " + String(msg).slice(0, 120));
       return { ok: false, error: msg };
     }
@@ -1359,7 +1359,7 @@ async function supabaseLogin(email, password) {
     return { ok: true };
   } catch (e) {
     flog("login erro de rede: " + (e.message || e));
-    return { ok: false, error: "Sem conexão. Tente de novo." };
+    return { ok: false, error: "No connection. Try again." };
   }
 }
 
@@ -1440,7 +1440,7 @@ async function checkUsage(retried) {
 function buildPayUrl() {
   const s = getSession();
   const ref = s ? encodeURIComponent(s.user_id) : "";
-  return `${FOUNDING_LINK}?client_reference_id=${ref}`;
+  return `${PRO_PAY_LINK}?client_reference_id=${ref}`;
 }
 
 // ---------- Janela de LOGIN nativo ----------
@@ -1457,7 +1457,7 @@ function openLoginWindow() {
     fullscreenable: false,
     minimizable: true,
     maximizable: false,
-    title: "Entrar na Capi",
+    title: "Sign in to Capi",
     backgroundColor: "#efeaff",
     webPreferences: {
       preload: path.join(__dirname, "..", "window", "login-preload.js"),
@@ -1550,7 +1550,7 @@ function openOnboardingWindow() {
     fullscreenable: false,
     minimizable: true,
     maximizable: false,
-    title: "Configurar a Capi",
+    title: "Set up Capi",
     backgroundColor: "#efeaff",
     webPreferences: {
       preload: path.join(__dirname, "..", "window", "onboarding-preload.js"),
@@ -1589,14 +1589,14 @@ const ONBOARD_APP_NAMES = {
 // renderer pergunta: o usuário escolheu um destino. Devolve se está instalado.
 ipcMain.handle("onboarding:pick", async (_e, bundleId) => {
   const installed = await isAppInstalled(bundleId);
-  return { installed, name: ONBOARD_APP_NAMES[bundleId] || "esse app" };
+  return { installed, name: ONBOARD_APP_NAMES[bundleId] || "this app" };
 });
 
 // renderer confirma: vira destino padrão + onboarded=true
 ipcMain.handle("onboarding:setDefault", (_e, bundleId) => {
   setOnboardingDefault(bundleId);
   markOnboarded();
-  return { ok: true, name: ONBOARD_APP_NAMES[bundleId] || "esse app" };
+  return { ok: true, name: ONBOARD_APP_NAMES[bundleId] || "this app" };
 });
 
 ipcMain.on("onboarding:open-external", (_e, url) => {
@@ -1619,16 +1619,16 @@ ipcMain.on("onboarding:done", () => {
 function panelFallbackHtml(url, reason) {
   return (
     "data:text/html;charset=utf-8," +
-    encodeURIComponent(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+    encodeURIComponent(`<!doctype html><html lang="en"><head><meta charset="utf-8">
 <style>html,body{height:100%;margin:0}body{display:grid;place-items:center;
 font:16px/1.5 -apple-system,system-ui,sans-serif;background:#efeaff;color:#1E1B2E}
 .box{max-width:420px;text-align:center;padding:32px}h1{font-size:20px;margin:.2em 0}
 small{color:#6b6580}code{background:#fff;border:1px solid #d9d2f5;border-radius:6px;padding:2px 6px}
 button{margin-top:18px;background:#7C5CFF;color:#fff;border:0;border-radius:10px;
 padding:10px 18px;font-weight:700;cursor:pointer}</style></head><body><div class="box">
-<h1>Painel indisponível</h1><p>Não consegui carregar <code>${url}</code>.</p>
+<h1>Panel unavailable</h1><p>Couldn't load <code>${url}</code>.</p>
 <small>${reason || ""}</small><br/>
-<button onclick="location.reload()">Tentar de novo</button></div></body></html>`)
+<button onclick="location.reload()">Try again</button></div></body></html>`)
   );
 }
 
@@ -1647,7 +1647,7 @@ function openPanelWindow() {
     minHeight: 600,
     resizable: true,
     fullscreenable: true,
-    title: "Capi — Painel",
+    title: "Capi — Panel",
     backgroundColor: "#efeaff",
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
@@ -1727,7 +1727,7 @@ ipcMain.on("win:pickTarget", async () => {
       },
     }));
   const menu = Menu.buildFromTemplate(
-    items.length ? items : [{ label: "(nenhum app novo aberto)", enabled: false }]
+    items.length ? items : [{ label: "(no new app open)", enabled: false }]
   );
   menu.popup({ window: mainWindow });
 });
@@ -1760,10 +1760,10 @@ ipcMain.handle("win:setShortcut", (_e, { which, accel } = {}) => {
   const cur = { shortcut: config.shortcut, voiceShortcut: config.voiceShortcut };
   const other = which === "voice" ? config.shortcut : config.voiceShortcut;
   if (!accel || !/\+/.test(accel) || !/(Command|Control|Alt|Shift)/.test(accel)) {
-    return { ok: false, reason: "Use um modificador (⌘/Ctrl/Alt/Shift) + uma tecla.", ...cur };
+    return { ok: false, reason: "Use a modifier (⌘/Ctrl/Alt/Shift) + a key.", ...cur };
   }
   if (accel === other) {
-    return { ok: false, reason: "Esse atalho já é o outro da Capi (captura vs. só falar).", ...cur };
+    return { ok: false, reason: "That shortcut is already Capi's other one (capture vs. voice only).", ...cur };
   }
   // testa registrar com handler vazio; se falhar, é inválido/ocupado
   globalShortcut.unregisterAll();
@@ -1772,7 +1772,7 @@ ipcMain.handle("win:setShortcut", (_e, { which, accel } = {}) => {
   globalShortcut.unregisterAll();
   if (!ok) {
     registerShortcut(); // restaura os atuais
-    return { ok: false, reason: "Combinação inválida ou já usada por outro app.", ...cur };
+    return { ok: false, reason: "Invalid combination or already used by another app.", ...cur };
   }
   if (which === "voice") config.voiceShortcut = accel; else config.shortcut = accel;
   saveConfig(config);
@@ -2037,7 +2037,7 @@ ipcMain.handle("overlay:commit", async (_evt, payload) => {
       pasted = res.ok;
       flog("newProject (Claude Desktop): ⌘N + colado=" + pasted);
       if (Notification.isSupported()) {
-        new Notification({ title: "Capi · nova conversa!", body: "Abri uma conversa nova no Claude Desktop com seu contexto.", silent: !config.playSound }).show();
+        new Notification({ title: "Capi · new conversation!", body: "Opened a new conversation in Claude Desktop with your context.", silent: !config.playSound }).show();
       }
       return { ok: true, savedPath: null, pasted, newProject: true, remaining: gateRemaining };
     }
@@ -2059,7 +2059,7 @@ ipcMain.handle("overlay:commit", async (_evt, payload) => {
         if (title) { linkProjectToActiveChat(projKey, title); refreshOpenTabs(); }
       }, 6000);
       if (Notification.isSupported()) {
-        new Notification({ title: "Capi · projeto criado!", body: `Abri uma aba nova: "${projName}" com seu briefing.`, silent: !config.playSound }).show();
+        new Notification({ title: "Capi · project created!", body: `Opened a new tab: "${projName}" with your briefing.`, silent: !config.playSound }).show();
       }
       return { ok: true, savedPath: null, pasted, newProject: true, remaining: gateRemaining };
     }
@@ -2111,17 +2111,17 @@ ipcMain.handle("overlay:commit", async (_evt, payload) => {
       const missTitle = tabMissed ? cleanTabQuery(wantedChat) : "";
       new Notification({
         title: tabMissed
-          ? "Capi · colou na aba ativa"
+          ? "Capi · pasted into the active tab"
           : pasted
-          ? "Capi · colado no chat!"
-          : "Capi · copiado!",
+          ? "Capi · pasted into the chat!"
+          : "Capi · copied!",
         body: tabMissed
-          ? `O chat "${missTitle}" não estava aberto. Abra ele como aba pra eu mirar certo.`
+          ? `The chat "${missTitle}" wasn't open. Open it as a tab so I can aim right.`
           : pasted
-          ? "Mandei direto pro app que estava aberto."
+          ? "Sent straight to the app that was open."
           : config.autoPaste
-          ? "Copiado. Ative a Capi em Acessibilidade pra colar sozinho."
-          : "Imagem + contexto no clipboard, pronto pra colar.",
+          ? "Copied. Enable Capi in Accessibility so it can paste on its own."
+          : "Image + context on the clipboard, ready to paste.",
         silent: !config.playSound,
       }).show();
     }
@@ -2165,14 +2165,14 @@ async function transcribeViaBackend(base64, mime) {
     });
     if (!r.ok) {
       flog("transcribe backend HTTP " + r.status);
-      return { ok: false, error: `Transcrição falhou (${r.status})` };
+      return { ok: false, error: `Transcription failed (${r.status})` };
     }
     const j = await r.json().catch(() => null);
     if (j && j.ok) return { ok: true, text: (j.text || "").trim() };
-    return { ok: false, error: (j && j.error) || "Transcrição falhou" };
+    return { ok: false, error: (j && j.error) || "Transcription failed" };
   } catch (e) {
     flog("transcribe backend erro: " + (e.message || e));
-    return { ok: false, error: "Sem conexão com o servidor de transcrição" };
+    return { ok: false, error: "No connection to the transcription server" };
   }
 }
 
@@ -2185,8 +2185,8 @@ async function transcribeGemini(base64, mime, key) {
         parts: [
           {
             text:
-              "Transcreva este áudio em português do Brasil. " +
-              "Responda APENAS com o texto falado, sem comentários, sem aspas.",
+              "Transcribe this audio in its original spoken language. " +
+              "Reply with ONLY the spoken text, no comments, no quotes.",
           },
           { inline_data: { mime_type: mime || "audio/wav", data: base64 } },
         ],
@@ -2201,7 +2201,7 @@ async function transcribeGemini(base64, mime, key) {
   if (!r.ok) {
     const t = await r.text().catch(() => "");
     flog("gemini HTTP " + r.status + " " + t.slice(0, 200));
-    return { ok: false, error: "Transcrição falhou (" + r.status + ")" };
+    return { ok: false, error: "Transcription failed (" + r.status + ")" };
   }
   const j = await r.json();
   const text = (j?.candidates?.[0]?.content?.parts || [])
@@ -2217,7 +2217,7 @@ async function transcribeOpenAI(base64, mime, key) {
   const ext = (mime || "audio/wav").includes("wav") ? "wav" : "webm";
   form.append("file", new Blob([buf], { type: mime || "audio/wav" }), "audio." + ext);
   form.append("model", "whisper-1");
-  form.append("language", "pt");
+  // no fixed language → Whisper auto-detects (app is international)
   const r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}` },
@@ -2226,7 +2226,7 @@ async function transcribeOpenAI(base64, mime, key) {
   if (!r.ok) {
     const t = await r.text().catch(() => "");
     flog("openai HTTP " + r.status + " " + t.slice(0, 200));
-    return { ok: false, error: "Transcrição falhou (" + r.status + ")" };
+    return { ok: false, error: "Transcription failed (" + r.status + ")" };
   }
   const j = await r.json();
   return { ok: true, text: (j.text || "").trim() };
@@ -2243,10 +2243,10 @@ ipcMain.handle("overlay:transcribe", async (_e, { base64, mime }) => {
     const oa = readEnvLocal("OPENAI_API_KEY");
     if (oa) return await transcribeOpenAI(base64, mime, oa);
     // 3) sem fallback local -> devolve o erro do backend
-    return viaBackend.ok ? { ok: false, error: "Transcrição vazia" } : viaBackend;
+    return viaBackend.ok ? { ok: false, error: "Empty transcription" } : viaBackend;
   } catch (e) {
     flog("transcribe erro: " + (e.message || e));
-    return { ok: false, error: "Erro na transcrição" };
+    return { ok: false, error: "Transcription error" };
   }
 });
 
@@ -2275,44 +2275,44 @@ function buildTray() {
   const trayImg = nativeImage.createFromPath(iconPath);
   if (!trayImg.isEmpty()) trayImg.setTemplateImage(true);
   tray = new Tray(trayImg.isEmpty() ? nativeImage.createEmpty() : trayImg);
-  tray.setToolTip("Capi — captura pro seu agente");
+  tray.setToolTip("Capi — capture to your agent");
   refreshTrayMenu();
 }
 
 function refreshTrayMenu() {
   const menu = Menu.buildFromTemplate([
     {
-      label: "Abrir Capi",
+      label: "Open Capi",
       click: () => openMainWindow(),
     },
     {
-      label: `Capturar agora (${config.shortcut})`,
+      label: `Capture now (${config.shortcut})`,
       click: () => startCapture(),
     },
     {
-      label: "Painel da conta…",
+      label: "Account panel…",
       click: () => openPanelWindow(),
     },
     {
-      label: "Configurar destino…",
+      label: "Set up destination…",
       click: () => openOnboardingWindow(),
     },
     (() => {
       const s = getSession();
       return s
         ? {
-            label: `Sair (${s.email || "conta"})`,
+            label: `Sign out (${s.email || "account"})`,
             click: () => {
               clearSession();
               if (Notification.isSupported())
-                new Notification({ title: "Capi", body: "Você saiu da conta.", silent: true }).show();
+                new Notification({ title: "Capi", body: "You've been signed out.", silent: true }).show();
             },
           }
-        : { label: "Entrar…", click: () => openLoginWindow() };
+        : { label: "Sign in…", click: () => openLoginWindow() };
     })(),
     { type: "separator" },
     {
-      label: "Apagar imagem após copiar",
+      label: "Delete image after copying",
       type: "checkbox",
       checked: config.autoDelete,
       click: (item) => {
@@ -2321,7 +2321,7 @@ function refreshTrayMenu() {
       },
     },
     {
-      label: "Colar direto no chat (auto-paste)",
+      label: "Paste straight into the chat (auto-paste)",
       type: "checkbox",
       checked: config.autoPaste,
       click: (item) => {
@@ -2333,7 +2333,7 @@ function refreshTrayMenu() {
       },
     },
     {
-      label: "Som ao copiar",
+      label: "Sound on copy",
       type: "checkbox",
       checked: config.playSound,
       click: (item) => {
@@ -2344,13 +2344,13 @@ function refreshTrayMenu() {
     { type: "separator" },
     {
       label: hasScreenPermission()
-        ? "Permissão de tela OK"
-        : "Conceder permissão de tela…",
+        ? "Screen permission OK"
+        : "Grant screen permission…",
       enabled: !hasScreenPermission(),
       click: () => promptScreenPermission(),
     },
     { type: "separator" },
-    { label: "Sair", role: "quit" },
+    { label: "Quit", role: "quit" },
   ]);
   tray.setContextMenu(menu);
 }

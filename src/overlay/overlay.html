@@ -1,40 +1,40 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Capi — captura</title>
+    <title>Capi — capture</title>
     <link rel="stylesheet" href="overlay.css" />
   </head>
   <body>
     <img id="shot" alt="" draggable="false" />
     <div id="veil"></div>
-    <button id="idle-cancel" title="Cancelar (Esc)">
+    <button id="idle-cancel" title="Cancel (Esc)">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
         <line x1="18" y1="6" x2="6" y2="18"></line>
         <line x1="6" y1="6" x2="18" y2="18"></line>
       </svg>
     </button>
     <div id="hint">
-      <span class="bracket">⌜</span> Arraste pra selecionar a área &nbsp;•&nbsp;
-      <b>Esc</b> pra cancelar <span class="bracket">⌟</span>
+      <span class="bracket">⌜</span> Drag to select an area &nbsp;•&nbsp;
+      <b>Esc</b> to cancel <span class="bracket">⌟</span>
     </div>
-    <button id="fullscreen-btn" title="Capturar a tela inteira">
+    <button id="fullscreen-btn" title="Capture the whole screen">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3 8V5a2 2 0 0 1 2-2h3"></path>
         <path d="M16 3h3a2 2 0 0 1 2 2v3"></path>
         <path d="M21 16v3a2 2 0 0 1-2 2h-3"></path>
         <path d="M8 21H5a2 2 0 0 1-2-2v-3"></path>
       </svg>
-      Tela inteira
+      Whole screen
     </button>
 
     <!-- toggle: gravar áudio automático ao selecionar (decide antes de selecionar) -->
-    <button id="autorec-pill" title="Ligar/desligar gravação automática ao selecionar">
+    <button id="autorec-pill" title="Turn auto-record on select on/off">
       <span class="ar-ico" id="ar-ico">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
       </span>
-      <span id="ar-label">Gravar ao selecionar: <b>ligado</b></span>
+      <span id="ar-label">Record on select: <b>on</b></span>
     </button>
 
     <div id="selection" hidden>
@@ -51,7 +51,7 @@
       <div class="tb-head" id="tb-head">
         <img id="capi-face" src="../../assets/capi-mascote.png" alt="Capi" draggable="false" />
         <span class="rec-dot" id="rec-dot"></span>
-        <span class="rec-label" id="rec-label">Gravando</span>
+        <span class="rec-label" id="rec-label">Recording</span>
         <span class="rec-timer" id="rec-timer">0:00</span>
         <!-- medidor de áudio ao vivo -->
         <div class="vu" id="vu" aria-hidden="true">
@@ -59,14 +59,14 @@
           <span></span><span></span><span></span><span></span><span></span>
         </div>
         <div class="tb-head-actions">
-          <button id="mic-btn" class="icon-btn" title="Gravar / parar">
+          <button id="mic-btn" class="icon-btn" title="Record / stop">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="9" y="2" width="6" height="12" rx="3"></rect>
               <path d="M5 10a7 7 0 0 0 14 0"></path>
               <line x1="12" y1="19" x2="12" y2="22"></line>
             </svg>
           </button>
-          <button id="cancel-btn" class="icon-btn danger" title="Cancelar (Esc)">
+          <button id="cancel-btn" class="icon-btn danger" title="Cancel (Esc)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -80,38 +80,38 @@
         <textarea
           id="note"
           rows="2"
-          placeholder="Fale… a transcrição aparece aqui"
+          placeholder="Speak… the transcription shows up here"
           spellcheck="false"
           readonly
         ></textarea>
         <div class="note-listening" id="note-listening">
           <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-          ouvindo…
+          listening…
         </div>
       </div>
 
       <!-- barra de transcrição (dinâmica) -->
       <div class="xcribe" id="xcribe" hidden>
         <div class="xcribe-track"><div class="xcribe-bar" id="xcribe-bar"></div></div>
-        <span class="xcribe-label" id="xcribe-label">Transcrevendo…</span>
+        <span class="xcribe-label" id="xcribe-label">Transcribing…</span>
       </div>
 
       <!-- TELINHA DE DESTINOS (aparece depois que para de gravar) -->
       <div class="picker" id="picker" hidden>
         <div class="picker-head">
-          <button class="picker-back" id="picker-back" title="Voltar" hidden>‹</button>
-          <div class="picker-title" id="picker-title">Pra onde eu mando?</div>
+          <button class="picker-back" id="picker-back" title="Back" hidden>‹</button>
+          <div class="picker-title" id="picker-title">Where to?</div>
         </div>
-        <input class="picker-search" id="picker-search" placeholder="Buscar…" hidden />
+        <input class="picker-search" id="picker-search" placeholder="Search…" hidden />
         <div class="picker-list" id="picker-list"><!-- destinos injetados aqui --></div>
         <div class="picker-foot">
-          <button class="focus-toggle" id="focus-toggle" title="Trocar comportamento ao enviar">
+          <button class="focus-toggle" id="focus-toggle" title="Change behavior when sending">
             <span class="ft-ico" id="ft-ico">↪</span>
-            <span id="ft-label">Ir pra tela</span>
+            <span id="ft-label">Go to screen</span>
           </button>
           <span class="picker-keys">
-            <kbd>↑</kbd><kbd>↓</kbd> escolher · <kbd>⏎</kbd> entra/envia ·
-            <kbd>←</kbd> volta · <kbd>Tab</kbd> editar
+            <kbd>↑</kbd><kbd>↓</kbd> choose · <kbd>⏎</kbd> enter/send ·
+            <kbd>←</kbd> back · <kbd>Tab</kbd> edit
           </span>
         </div>
       </div>

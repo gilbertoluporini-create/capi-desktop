@@ -85,8 +85,8 @@ function startVoiceMode() {
 function renderAutoRecPill() {
   autorecPill.classList.toggle("off", !autoRecord);
   arLabel.innerHTML = autoRecord
-    ? "Gravar ao selecionar: <b>ligado</b>"
-    : "Gravar ao selecionar: <b>desligado</b>";
+    ? "Record on select: <b>on</b>"
+    : "Record on select: <b>off</b>";
 }
 autorecPill.addEventListener("click", (e) => {
   e.stopPropagation();
@@ -122,13 +122,13 @@ function setStatus(msg) {
 }
 
 // ---------- destinos: App -> Projeto -> Agente (IA) | App -> Contatos (mensageiro) ----------
-let frontmostName = "onde eu estava";
+let frontmostName = "where I was";
 // pickLevel: "apps" | "projects" | "agents"  (curProject só em "agents")
 let curProject = null;
 
 let pinnedList = [];
 function buildTargets(data) {
-  frontmostName = data.frontmost && data.frontmost.name ? data.frontmost.name : "onde eu estava";
+  frontmostName = data.frontmost && data.frontmost.name ? data.frontmost.name : "where I was";
   tree = Array.isArray(data.appsTree) ? data.appsTree : [];
   pinnedList = Array.isArray(data.pinned) ? data.pinned : [];
   defaultId = data.agentDefault || "__last__";
@@ -139,10 +139,10 @@ function buildTargets(data) {
 function appSub(app) {
   if (app.type === "messenger") {
     const n = (app.contacts || []).length;
-    return n ? `${n} contato${n > 1 ? "s" : ""}` : "conversa atual";
+    return n ? `${n} contact${n > 1 ? "s" : ""}` : "current conversation";
   }
   const n = (app.projects || []).length;
-  return n ? `${n} projeto${n > 1 ? "s" : ""}` : "criar projeto";
+  return n ? `${n} project${n > 1 ? "s" : ""}` : "create project";
 }
 
 // NÍVEL 1 — Fixados (atalhos diretos) + apps + "Último app"
@@ -150,7 +150,7 @@ function appsRows() {
   const out = [];
   pinnedList.forEach((p) =>
     out.push({
-      kind: "pin", pin: p, name: p.name, sub: p.sub || "fixado",
+      kind: "pin", pin: p, name: p.name, sub: p.sub || "pinned",
       avatar: p.avatar, color: p.color, pinned: true,
     })
   );
@@ -160,7 +160,7 @@ function appsRows() {
       avatar: app.avatar, color: app.color, descend: true,
     })
   );
-  out.push({ kind: "last", name: "Último app", sub: frontmostName, avatar: "back", color: "#9b95ad" });
+  out.push({ kind: "last", name: "Last app", sub: frontmostName, avatar: "back", color: "#9b95ad" });
   return out;
 }
 
@@ -168,20 +168,20 @@ function appsRows() {
 function midRows(app) {
   if (app.type === "messenger") {
     // mensageiro: conversa atual + contatos + novo contato
-    const out = [{ kind: "conv-app", app, name: "Conversa atual", sub: "no que estiver aberto", avatar: app.avatar, color: app.color }];
+    const out = [{ kind: "conv-app", app, name: "Current conversation", sub: "whatever is open", avatar: app.avatar, color: app.color }];
     (app.contacts || []).forEach((c) =>
       out.push({ kind: "contact", app, child: c, name: c.name, sub: c.sub || "", avatar: c.avatar, color: c.color })
     );
-    out.push({ kind: "new-contact", app, name: "Novo contato", sub: "abre a configuração", avatar: "person", color: "#7c5cff" });
+    out.push({ kind: "new-contact", app, name: "New contact", sub: "opens settings", avatar: "person", color: "#7c5cff" });
     return out;
   }
   // IA: conversa atual (app) + ABAS ABERTAS (envio direto) + projetos (histórico) + criar projeto
-  const out = [{ kind: "conv-app", app, name: "Conversa atual", sub: "no que estiver aberto agora", avatar: app.avatar, color: app.color }];
+  const out = [{ kind: "conv-app", app, name: "Current conversation", sub: "whatever is open right now", avatar: app.avatar, color: app.color }];
   // abas abertas AGORA no VS Code — vai direto pra aba via `edt` (o que o Giba pediu)
   (app.openTabs || []).forEach((t) =>
     out.push({
       kind: "tab", app, name: t.title, windowMatch: t.title,
-      sub: t.here ? "aberta · você está aqui" : "aba aberta no VS Code",
+      sub: t.here ? "open · you're here" : "tab open in VS Code",
       here: !!t.here,
       avatar: app.avatar, color: app.color,
     })
@@ -189,7 +189,7 @@ function midRows(app) {
   (app.projects || []).forEach((p) =>
     out.push({ kind: "project", app, project: p, name: p.name, sub: p.sub || "", here: !!p.here, avatar: app.avatar, color: app.color, descend: true })
   );
-  out.push({ kind: "new-project", app, name: "Criar projeto", sub: "abre aba nova do Claude com seu briefing", avatar: "grid", color: "#7c5cff" });
+  out.push({ kind: "new-project", app, name: "Create project", sub: "opens a new Claude tab with your briefing", avatar: "grid", color: "#7c5cff" });
   return out;
 }
 
@@ -197,13 +197,13 @@ function midRows(app) {
 function agentRows(app, project) {
   const out = [{
     kind: "conv-proj", app, project,
-    name: "Abrir este chat", sub: project.windowMatch ? `vai pra aba: ${project.windowMatch}` : "no que estiver aberto",
+    name: "Open this chat", sub: project.windowMatch ? `goes to tab: ${project.windowMatch}` : "whatever is open",
     avatar: app.avatar, color: app.color,
   }];
   (project.agents || []).forEach((a) =>
     out.push({ kind: "agent", app, project, child: a, name: a.name, sub: a.sub || "", avatar: a.avatar, color: a.color })
   );
-  out.push({ kind: "new-agent", app, project, name: "Criar agente", sub: "abre a configuração", avatar: "robot", color: "#7c5cff" });
+  out.push({ kind: "new-agent", app, project, name: "Create agent", sub: "opens settings", avatar: "robot", color: "#7c5cff" });
   return out;
 }
 
@@ -231,7 +231,7 @@ function enterMidLevel(app) {
   pickLevel = "projects"; curApp = app; curProject = null; searchQuery = "";
   rows = midRows(app);
   // pré-seleciona a aba ATIVA (a "aqui"), senão a 1ª aba/projeto (pula "conversa atual")
-  let idx = rows.findIndex((r) => r.kind === "tab" && /você está aqui/.test(r.sub || ""));
+  let idx = rows.findIndex((r) => r.kind === "tab" && /you're here/.test(r.sub || ""));
   if (idx < 0) idx = rows.length > 1 ? 1 : 0;
   selIdx = idx;
   applySearchVisibility(); renderPicker();
@@ -277,7 +277,7 @@ function refilter() {
 
 function renderPicker() {
   if (pickLevel === "apps") {
-    pickerTitle.textContent = "Pra onde eu mando?";
+    pickerTitle.textContent = "Where to?";
     pickerBack.hidden = true;
   } else if (pickLevel === "projects") {
     pickerTitle.textContent = curApp.name;
@@ -365,10 +365,10 @@ function goBack() {
 function selectedTarget() {
   const r = rows[selIdx];
   if (!r) return { id: "__last__", bundleId: "__last__", windowMatch: null };
-  if (r.kind === "last") return { id: "__last__", name: "Último app", bundleId: "__last__", windowMatch: null };
+  if (r.kind === "last") return { id: "__last__", name: "Last app", bundleId: "__last__", windowMatch: null };
   if (r.kind === "pin") return { id: r.pin.id, name: r.pin.name, bundleId: r.pin.bundleId, windowMatch: r.pin.windowMatch || null };
   if (r.kind === "conv-app") return { id: r.app.id, name: r.app.name, bundleId: r.app.bundleId, windowMatch: null };
-  if (r.kind === "new-project") return { id: "__newproj__", name: "Novo projeto", bundleId: r.app.bundleId, windowMatch: null, newProject: true };
+  if (r.kind === "new-project") return { id: "__newproj__", name: "New project", bundleId: r.app.bundleId, windowMatch: null, newProject: true };
   if (r.kind === "tab") return { id: "tab:" + r.name, name: r.name, bundleId: r.app.bundleId, windowMatch: r.windowMatch || r.name };
   if (r.kind === "conv-proj") return { id: r.project.id, name: r.project.name, bundleId: r.app.bundleId, windowMatch: r.project.windowMatch || null };
   if (r.kind === "contact") return { id: r.child.id, name: r.child.name, bundleId: r.app.bundleId, windowMatch: null };
@@ -380,11 +380,11 @@ function renderFocusToggle() {
   if (focusMode === "stay") {
     // "ficar aqui": seta que volta pra origem (corner-up-left)
     ftIco.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>`;
-    ftLabel.textContent = "Mandar e ficar aqui";
+    ftLabel.textContent = "Send and stay here";
   } else {
     // "ir pra tela": seta que avança (corner-down-right / share)
     ftIco.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>`;
-    ftLabel.textContent = "Ir pra tela";
+    ftLabel.textContent = "Go to screen";
   }
 }
 focusToggle.addEventListener("click", (e) => {
@@ -569,7 +569,7 @@ async function startRecording() {
   if (xcribeTimer) { clearInterval(xcribeTimer); xcribeTimer = null; }
   recDot.classList.remove("done");
   recDot.hidden = false;
-  recLabel.textContent = "Gravando";
+  recLabel.textContent = "Recording";
   setMicRecording(true);
   picker.hidden = true;
   vu.classList.remove("off");
@@ -595,10 +595,10 @@ async function startRecording() {
     mediaRecorder.onstop = finalizeTranscription;
     mediaRecorder.start(2000);
   } catch (e) {
-    recLabel.textContent = "Sem microfone";
+    recLabel.textContent = "No microphone";
     setMicRecording(false);
     noteListening.hidden = true;
-    setStatus("Sem acesso ao microfone — pode digitar");
+    setStatus("No microphone access — you can type instead");
     enterPicking(true);
   }
 }
@@ -741,7 +741,7 @@ function startXcribe() {
   if (xcribeTimer) clearInterval(xcribeTimer);
   xcribeTimer = setInterval(() => {
     t0 += 0.1;
-    xcribeLabel.textContent = `Transcrevendo… ${t0.toFixed(1).replace(".", ",")}s`;
+    xcribeLabel.textContent = `Transcribing… ${t0.toFixed(1)}s`;
   }, 100);
 }
 function finishXcribe() {
@@ -749,7 +749,7 @@ function finishXcribe() {
   xcribe.classList.add("done");
   xcribeBar.style.transition = "width .25s ease-out";
   xcribeBar.style.width = "100%";
-  xcribeLabel.textContent = "Pronto";
+  xcribeLabel.textContent = "Done";
   setTimeout(() => { xcribe.hidden = true; }, 700);
 }
 
@@ -771,7 +771,7 @@ async function finalizeTranscription() {
   finalizing = false;
   finishXcribe();
   recDot.classList.add("done");
-  recLabel.textContent = "Pronto";
+  recLabel.textContent = "Done";
   // se já escolheu o destino, manda agora
   if (pendingCommit) { pendingCommit = false; commit(); }
 }
@@ -789,11 +789,11 @@ function enterPicking(noText) {
   setStatus("");
   if (noText) {
     recDot.hidden = true;
-    recLabel.textContent = "Fale ou digite";
+    recLabel.textContent = "Speak or type";
   } else {
     recDot.hidden = false;
     recDot.classList.toggle("done", !finalizing);
-    recLabel.textContent = finalizing ? "Transcrevendo" : "Pronto";
+    recLabel.textContent = finalizing ? "Transcribing" : "Done";
   }
   note.readOnly = false;
   note.classList.add("editable");
@@ -881,7 +881,7 @@ async function commit() {
   // ainda transcrevendo? marca o destino e envia assim que terminar
   if (finalizing) {
     pendingCommit = true;
-    setStatus(`Envio pro "${target.name || "destino"}" assim que terminar de transcrever…`);
+    setStatus(`Sending to "${target.name || "destination"}" as soon as transcription finishes…`);
     return;
   }
   committed = true;
@@ -899,7 +899,7 @@ async function commit() {
   // GATE de conta: o main pode pedir login ou mostrar o paywall (20 usos grátis)
   if (res && res.needLogin) {
     committed = false; // deixa reenviar depois de logar
-    setStatus("Entre na Capi pra enviar — abri o login. Depois é só apertar Enter.");
+    setStatus("Sign in to Capi to send — I opened the login. Then just press Enter.");
     return;
   }
   if (res && res.paywall) {
@@ -910,7 +910,7 @@ async function commit() {
   // sucesso → o main fecha o overlay.
 }
 
-// Painel de paywall (envios grátis esgotados). Autossuficiente, sem depender do CSS.
+// Paywall panel (free sends used up). Self-contained, doesn't rely on CSS.
 function showPaywall(payUrl) {
   if (document.getElementById("capi-paywall")) return;
   const wrap = document.createElement("div");
@@ -923,13 +923,13 @@ function showPaywall(payUrl) {
     'text-align:center;box-shadow:0 30px 60px -20px rgba(91,63,214,.5);' +
     'font-family:-apple-system,system-ui,sans-serif;color:#1e1b2e">' +
     '<img src="../../assets/capi-mascote.png" style="width:54px;height:54px;border-radius:13px" />' +
-    '<h2 style="font-size:18px;margin:12px 0 4px">Seus 20 envios grátis acabaram</h2>' +
+    '<h2 style="font-size:18px;margin:12px 0 4px">Your free sends are used up</h2>' +
     '<p style="color:#6b6580;font-size:13.5px;margin:0 0 18px;line-height:1.5">' +
-    "Libere a Capi ilimitada por <b>R$97</b> (vitalício). Pagou, é só voltar e enviar.</p>" +
+    "Go Pro to unlock unlimited Capi. Once you subscribe, just come back and send.</p>" +
     '<button id="capi-pay" style="width:100%;padding:12px;border:0;border-radius:12px;' +
-    'background:#7c5cff;color:#fff;font-weight:700;font-size:14.5px;cursor:pointer">Pagar R$97 e liberar</button>' +
+    'background:#7c5cff;color:#fff;font-weight:700;font-size:14.5px;cursor:pointer">Subscribe to keep going</button>' +
     '<button id="capi-paylater" style="width:100%;margin-top:9px;padding:10px;border:0;' +
-    'background:transparent;color:#6b6580;font-size:13px;cursor:pointer">Agora não</button>' +
+    'background:transparent;color:#6b6580;font-size:13px;cursor:pointer">Not now</button>' +
     "</div>";
   document.body.appendChild(wrap);
   document.getElementById("capi-pay").onclick = () => window.capi.openPay(payUrl);
