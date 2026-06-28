@@ -1,0 +1,19 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <g fill="none" stroke="#000" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- orelhas -->
+    <circle cx="30" cy="27" r="9.5"/>
+    <circle cx="70" cy="27" r="9.5"/>
+    <!-- cabeça -->
+    <rect x="19" y="28" width="62" height="56" rx="26"/>
+    <!-- focinho -->
+    <ellipse cx="50" cy="66" rx="13" ry="10"/>
+  </g>
+  <g fill="#000" stroke="none">
+    <!-- olhos -->
+    <circle cx="38" cy="50" r="3.4"/>
+    <circle cx="62" cy="50" r="3.4"/>
+    <!-- narinas -->
+    <circle cx="45" cy="64" r="2.2"/>
+    <circle cx="55" cy="64" r="2.2"/>
+  </g>
+</svg>

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Capi</title>
+    <link rel="stylesheet" href="window.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <!-- ====================== SIDEBAR ====================== -->
+      <aside class="sidebar">
+        <header class="hero">
+          <img id="mascote" src="../../assets/capi-mascote.png" alt="Capi" />
+          <div class="hero-txt">
+            <span class="wordmark-text">Capi</span>
+            <p>Captura + contexto, direto pro seu agente.</p>
+          </div>
+        </header>
+
+        <button id="captureBtn" class="cta">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.5L8 3h8l1.5 3H21a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          Capturar agora <span class="kbd-hint">⌘⇧2</span>
+        </button>
+
+        <nav class="nav">
+          <a class="nav-item" href="#sec-permissoes">
+            <span class="nav-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><span class="nav-label">Permissões</span>
+          </a>
+          <a class="nav-item" href="#sec-ajustes">
+            <span class="nav-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></span><span class="nav-label">Ajustes</span>
+          </a>
+          <a class="nav-item" href="#sec-apps">
+            <span class="nav-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg></span><span class="nav-label">Apps &amp; destinos</span>
+          </a>
+          <a class="nav-item" href="#sec-conta">
+            <span class="nav-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="nav-label">Conta</span>
+          </a>
+          <button class="nav-item" id="openPanelBtn" type="button">
+            <span class="nav-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span><span class="nav-label">Painel da conta</span>
+          </button>
+        </nav>
+
+        <footer class="sidebar-foot"><span id="version">Capi · dev</span></footer>
+      </aside>
+
+      <!-- ====================== CONTENT ====================== -->
+      <main class="content">
+        <div class="card-grid">
+          <section class="card" id="sec-permissoes">
+            <h2>Permissões</h2>
+            <div class="perm" id="perm-screen">
+              <span class="dot"></span>
+              <div class="perm-txt"><b>Gravação de tela</b><small>pra capturar a tela</small></div>
+              <button class="mini" data-act="screen">Ajustes</button>
+            </div>
+            <div class="perm" id="perm-ax">
+              <span class="dot"></span>
+              <div class="perm-txt"><b>Acessibilidade</b><small>pra colar sozinho no chat</small></div>
+              <button class="mini" data-act="ax">Ajustes</button>
+            </div>
+          </section>
+
+          <section class="card" id="sec-ajustes">
+            <h2>Ajustes</h2>
+            <label class="row">
+              <div class="row-txt"><b>Colar direto no chat</b><small>Enter cola no app que estava aberto</small></div>
+              <input type="checkbox" id="opt-autoPaste" class="switch" />
+            </label>
+            <label class="row">
+              <div class="row-txt"><b>Apagar imagem após copiar</b><small>não acumula arquivos</small></div>
+              <input type="checkbox" id="opt-autoDelete" class="switch" />
+            </label>
+            <label class="row">
+              <div class="row-txt"><b>Som ao copiar</b><small>feedback sonoro</small></div>
+              <input type="checkbox" id="opt-playSound" class="switch" />
+            </label>
+            <div class="row">
+              <div class="row-txt"><b>Atalho — captura</b><small>print + voz pro agente</small></div>
+              <button class="shortcut" id="shortcut" data-which="capture" title="Clique e tecle a combinação">⌘⇧2</button>
+            </div>
+            <div class="row">
+              <div class="row-txt"><b>Atalho — só falar</b><small>voz sem print</small></div>
+              <button class="shortcut" id="voiceShortcut" data-which="voice" title="Clique e tecle a combinação">⌘⇧1</button>
+            </div>
+            <small class="sc-hint" id="sc-hint" hidden></small>
+          </section>
+
+          <section class="card card-wide" id="sec-apps">
+            <div id="apps-card">
+              <!-- NÍVEL 1: apps -->
+              <div id="screen-apps">
+                <h2>Apps & destinos</h2>
+                <p class="hint-txt">
+                  Adicione os apps pra onde a Capi manda. <b>Clique num app</b> pra
+                  configurar os agentes (IA) ou contatos (mensageiro) dele.
+                </p>
+                <label class="row">
+                  <div class="row-txt"><b>Último app usado</b><small>onde você estava</small></div>
+                  <input type="radio" name="cdef" class="radio" id="cdef-last" />
+                </label>
+                <div id="apps-list"></div>
+                <button id="addApp" class="add-btn">+ Adicionar app</button>
+              </div>
+
+              <!-- NÍVEL 2: dentro de um app -->
+              <div id="screen-app" hidden>
+                <button id="app-back" class="back-btn">‹ Apps</button>
+                <div class="app-head">
+                  <span class="app-head-ico" id="app-head-ico"></span>
+                  <div class="app-head-txt">
+                    <b id="app-head-name"></b>
+                    <small id="app-head-type"></small>
+                  </div>
+                </div>
+                <label class="row">
+                  <div class="row-txt"><b>Barra de pesquisa</b><small>na captura, buscar o destino</small></div>
+                  <input type="checkbox" id="app-search" class="switch" />
+                </label>
+                <div id="app-children"></div>
+                <button id="addChild" class="add-btn">+ Criar agente</button>
+                <button id="addProject" class="add-btn" hidden>+ Criar projeto</button>
+                <button id="seedFrentes" class="add-btn seed-btn" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polygon points="13 2 4 14 12 14 11 22 20 10 12 10 13 2"/></svg>Criar as 5 frentes da Capi</button>
+                <button id="removeApp" class="rm-app-btn">Remover este app</button>
+              </div>
+
+              <!-- NÍVEL 3: agentes dentro de um projeto -->
+              <div id="screen-project" hidden>
+                <button id="proj-back" class="back-btn">‹ Projetos</button>
+                <div class="app-head">
+                  <span class="app-head-ico" id="proj-head-ico"></span>
+                  <div class="app-head-txt">
+                    <b id="proj-head-name"></b>
+                    <small id="proj-head-sub"></small>
+                  </div>
+                </div>
+                <div id="proj-agents"></div>
+                <button id="addAgentInProj" class="add-btn">+ Criar agente aqui</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="card soon" id="sec-conta">
+            <h2>Conta &amp; Histórico <span class="badge">em breve</span></h2>
+            <p class="soon-txt">
+              Login, sincronização das capturas na nuvem e painel de uso chegam na
+              próxima fase (o SaaS da Capi).
+            </p>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <!-- editor de agente (dentro de um app de IA) -->
+    <div id="agent-editor" class="modal" hidden>
+      <div class="modal-card">
+        <h3 id="ae-title">Novo agente</h3>
+        <label class="fld"><span>Nome</span>
+          <input id="ae-name" placeholder="Ex: Orquestrador" maxlength="28" />
+        </label>
+        <label class="fld"><span>Assunto</span>
+          <input id="ae-subject" placeholder="Do que ele cuida" maxlength="40" />
+        </label>
+        <div class="fld"><span>Rostinho</span><div id="ae-avatars" class="picker-grid"></div></div>
+        <div class="fld"><span>Cor</span><div id="ae-colors" class="picker-grid"></div></div>
+        <div class="fld"><span>Onde mandar</span>
+          <div class="seg" id="ae-seg">
+            <button type="button" class="seg-btn active" data-kind="current">Conversa atual</button>
+            <button type="button" class="seg-btn" data-kind="project" id="ae-kind-project">Janela específica</button>
+          </div>
+        </div>
+        <div class="fld" id="ae-project-row" hidden>
+          <span>Janela alvo (VS Code)</span>
+          <button type="button" id="ae-aim" class="btn ghost aim-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.6"/></svg>Mirar a janela ativa do VS Code</button>
+          <small class="fld-hint" id="ae-aim-label">Deixe o chat certo na frente no VS Code, depois clique aqui.</small>
+          <select id="ae-project" hidden></select>
+        </div>
+        <details class="fld ae-frente">
+          <summary><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px"><polygon points="7 4 19 12 7 20 7 4"/></svg>Abrir frente (opcional) — abre janela + Claude Code + prompt</summary>
+          <label class="fld"><span>Pasta a abrir</span>
+            <input id="ae-folder" placeholder="Ex: /Users/voce/cap/web" />
+          </label>
+          <label class="fld"><span>Prompt inicial (briefing)</span>
+            <textarea id="ae-initprompt" rows="4" placeholder="Você é o Capi-Web... (cola o briefing que define o agente)"></textarea>
+          </label>
+        </details>
+        <div class="modal-actions">
+          <button id="ae-cancel" class="btn ghost">Cancelar</button>
+          <button id="ae-save" class="btn primary">Salvar agente</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- adicionar app -->
+    <div id="app-picker" class="modal" hidden>
+      <div class="modal-card">
+        <h3>Adicionar app</h3>
+        <label class="fld"><span>App aberto</span>
+          <select id="ap-app"></select>
+        </label>
+        <div class="fld"><span>Tipo</span>
+          <div class="seg" id="ap-seg">
+            <button type="button" class="seg-btn active" data-type="ai">IA / código</button>
+            <button type="button" class="seg-btn" data-type="messenger">Mensageiro</button>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button id="ap-cancel" class="btn ghost">Cancelar</button>
+          <button id="ap-save" class="btn primary">Adicionar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- editor de contato (dentro de um app mensageiro) -->
+    <div id="contact-editor" class="modal" hidden>
+      <div class="modal-card">
+        <h3>Contato frequente</h3>
+        <label class="fld"><span>Nome</span>
+          <input id="ce-name" placeholder="Ex: Ingrid" maxlength="28" />
+        </label>
+        <label class="fld"><span>Dica (opcional)</span>
+          <input id="ce-hint" placeholder="ex: mãe · número" maxlength="40" />
+        </label>
+        <div class="modal-actions">
+          <button id="ce-cancel" class="btn ghost">Cancelar</button>
+          <button id="ce-save" class="btn primary">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="../shared/icons.js"></script>
+    <script src="window.js"></script>
+  </body>
+</html>

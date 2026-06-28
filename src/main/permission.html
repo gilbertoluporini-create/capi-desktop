@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <script>
+      // Tentar abrir um stream de captura de tela é o gatilho mais confiável
+      // pra fazer o macOS mostrar o pedido de "Gravação de Tela".
+      (async () => {
+        const done = (r) => window.capiPerm && window.capiPerm.report(r);
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: { mandatory: { chromeMediaSource: "desktop" } },
+          });
+          stream.getTracks().forEach((t) => t.stop());
+          done("granted");
+        } catch (e) {
+          done("error:" + (e && e.name ? e.name : String(e)));
+        }
+      })();
+    </script>
+  </body>
+</html>

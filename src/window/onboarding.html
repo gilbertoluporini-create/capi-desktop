@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Configurar a Capi</title>
+    <style>
+      :root {
+        --purple: #7c5cff;
+        --purple-deep: #5b3fd6;
+        --ink: #1e1b2e;
+        --lav-100: #f1edff;
+        --lav-200: #ddd4fb;
+        --muted: #6b6580;
+        --green: #22c55e;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #efeaff;
+        color: var(--ink);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 26px 28px;
+      }
+      .logo { display: flex; align-items: center; gap: 9px; margin-bottom: 4px; }
+      .logo img { width: 36px; height: 36px; border-radius: 10px; }
+      .logo b { font-size: 19px; color: var(--purple-deep); letter-spacing: -0.3px; }
+      h1 { font-size: 18px; margin: 12px 0 2px; text-align: center; }
+      p.sub { margin: 0 0 16px; color: var(--muted); text-align: center; font-size: 13px; }
+      .options { width: 100%; display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+      .opt {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-align: left;
+        padding: 13px 15px;
+        border: 1.5px solid var(--lav-200);
+        border-radius: 13px;
+        background: #fff;
+        color: var(--ink);
+        cursor: pointer;
+        transition: border-color .15s, box-shadow .15s, transform .05s;
+      }
+      .opt:hover { border-color: var(--purple); box-shadow: 0 0 0 4px rgba(124,92,255,.12); }
+      .opt:active { transform: translateY(1px); }
+      .opt.reco { border-color: var(--purple); background: var(--lav-100); }
+      .opt .ttl { font-weight: 700; font-size: 14.5px; }
+      .opt .desc { font-size: 12px; color: var(--muted); }
+      .opt .ico {
+        width: 38px; height: 38px; flex: 0 0 38px; border-radius: 10px;
+        background: var(--lav-100); display: grid; place-items: center;
+        font-size: 19px;
+      }
+      .opt.reco .ico { background: #fff; }
+      .opt .txt { display: flex; flex-direction: column; }
+      .badge {
+        margin-left: auto; font-size: 10.5px; font-weight: 800;
+        color: var(--purple-deep); background: #fff;
+        border: 1px solid var(--lav-200); border-radius: 999px; padding: 3px 9px;
+      }
+      .step { width: 100%; }
+      .step.hidden { display: none; }
+      button.primary {
+        width: 100%;
+        margin-top: 18px;
+        padding: 12px;
+        border: 0;
+        border-radius: 12px;
+        background: var(--purple);
+        color: #fff;
+        font-weight: 700;
+        font-size: 14.5px;
+        cursor: pointer;
+      }
+      button.primary:hover { background: var(--purple-deep); }
+      button.ghost {
+        width: 100%;
+        margin-top: 10px;
+        padding: 11px;
+        border: 1.5px solid var(--lav-200);
+        border-radius: 12px;
+        background: #fff;
+        color: var(--purple-deep);
+        font-weight: 700;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      button.ghost:hover { border-color: var(--purple); }
+      .guide {
+        width: 100%; margin-top: 14px; background: #fff;
+        border: 1px solid var(--lav-200); border-radius: 12px; padding: 14px 16px;
+      }
+      .guide h3 { margin: 0 0 6px; font-size: 14px; }
+      .guide ol { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; }
+      .guide a { color: var(--purple-deep); font-weight: 600; cursor: pointer; text-decoration: none; }
+      .guide a:hover { text-decoration: underline; }
+      .done-emoji { font-size: 44px; text-align: center; margin: 8px 0 2px; }
+      .skip { margin-top: 16px; text-align: center; font-size: 12.5px; }
+      .skip a { color: var(--muted); cursor: pointer; text-decoration: none; }
+      .skip a:hover { text-decoration: underline; }
+      .back { margin-top: 12px; text-align: center; font-size: 12.5px; }
+      .back a { color: var(--purple-deep); cursor: pointer; text-decoration: none; font-weight: 600; }
+      .back a:hover { text-decoration: underline; }
+      .kbd {
+        display: inline-block; background: #fff; border: 1px solid var(--lav-200);
+        border-radius: 7px; padding: 2px 8px; font-weight: 800; color: var(--purple-deep);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="logo">
+      <img src="../../assets/capi-mascote.png" alt="Capi" />
+      <b>Capi</b>
+    </div>
+
+    <!-- PASSO 1: escolher destino -->
+    <div class="step" id="step-pick">
+      <h1>Pra onde mandar seu contexto?</h1>
+      <p class="sub">Escolha o app que vai receber sua captura + texto.</p>
+      <div class="options">
+        <button class="opt reco" data-bid="com.anthropic.claudefordesktop">
+          <span class="ico">✨</span>
+          <span class="txt">
+            <span class="ttl">★ Claude Desktop</span>
+            <span class="desc">mais fácil, funciona na hora</span>
+          </span>
+          <span class="badge">RECOMENDADO</span>
+        </button>
+        <button class="opt" data-bid="com.microsoft.VSCode">
+          <span class="ico">🧑‍💻</span>
+          <span class="txt">
+            <span class="ttl">VS Code</span>
+            <span class="desc">pra programar (Claude Code)</span>
+          </span>
+        </button>
+        <button class="opt" data-bid="com.todesktop.230313mzl4w4u92">
+          <span class="ico">⌨️</span>
+          <span class="txt">
+            <span class="ttl">Cursor</span>
+            <span class="desc">pra programar</span>
+          </span>
+        </button>
+        <button class="opt" data-other="1">
+          <span class="ico">➕</span>
+          <span class="txt">
+            <span class="ttl">Outro app</span>
+            <span class="desc">escolher manualmente nas configurações</span>
+          </span>
+        </button>
+      </div>
+      <div class="skip"><a id="skip1">Pular por agora</a></div>
+    </div>
+
+    <!-- PASSO 2: app NÃO instalado (guia) -->
+    <div class="step hidden" id="step-missing">
+      <h1 id="missing-title">Instalar o app</h1>
+      <p class="sub" id="missing-sub"></p>
+      <div class="guide" id="missing-guide"></div>
+      <button class="primary" id="missing-download">Baixar</button>
+      <button class="ghost" id="missing-continue">Já instalei, continuar</button>
+      <div id="missing-claude-alt" style="width:100%"></div>
+      <div class="back"><a id="missing-back">‹ Voltar</a></div>
+    </div>
+
+    <!-- PASSO 3: tudo pronto -->
+    <div class="step hidden" id="step-done">
+      <div class="done-emoji">🎉</div>
+      <h1>Tudo pronto!</h1>
+      <p class="sub" id="done-sub">Seu destino está configurado.</p>
+      <p class="sub">Aperte <span class="kbd">⌘ ⇧ 2</span> em qualquer tela pra mandar pro seu agente.</p>
+      <button class="primary" id="done-close">Começar a usar</button>
+    </div>
+
+    <script>
+      const ob = window.capiOnboarding;
+      const CLAUDE = "com.anthropic.claudefordesktop";
+      const VSCODE = "com.microsoft.VSCode";
+      const CURSOR = "com.todesktop.230313mzl4w4u92";
+
+      const steps = {
+        pick: document.getElementById("step-pick"),
+        missing: document.getElementById("step-missing"),
+        done: document.getElementById("step-done"),
+      };
+      function show(name) {
+        for (const k in steps) steps[k].classList.toggle("hidden", k !== name);
+      }
+
+      // dados por destino (label, link de download, guia)
+      const APPS = {
+        [CLAUDE]: {
+          name: "Claude Desktop",
+          download: "https://claude.ai/download",
+          guide: { h: "Baixe o Claude Desktop", steps: ["Abra o link de download.", "Instale e faça login na sua conta Claude.", "Volte aqui e clique em \"Já instalei\"."] },
+        },
+        [VSCODE]: {
+          name: "VS Code",
+          download: "https://code.visualstudio.com/download",
+          guide: {
+            h: "Instalar VS Code + Claude Code",
+            steps: ["Baixe e instale o VS Code.", "Instale a extensão \"Claude Code\".", "Volte aqui e clique em \"Já instalei\"."],
+            ext: "https://marketplace.visualstudio.com/items?itemName=anthropic.claude-code",
+            claudeAlt: true,
+          },
+        },
+        [CURSOR]: {
+          name: "Cursor",
+          download: "https://cursor.com",
+          guide: { h: "Instalar Cursor", steps: ["Baixe e instale o Cursor.", "Abra e ative o Claude dentro dele.", "Volte aqui e clique em \"Já instalei\"."] },
+        },
+      };
+
+      let currentBid = null;
+
+      async function choose(bid) {
+        currentBid = bid;
+        const res = await ob.pick(bid);
+        if (res && res.installed) {
+          await ob.setDefault(bid);
+          document.getElementById("done-sub").textContent =
+            "Pronto! Suas capturas vão direto pro " + (res.name || APPS[bid].name) + ".";
+          show("done");
+        } else {
+          renderMissing(bid);
+          show("missing");
+        }
+      }
+
+      function renderMissing(bid) {
+        const a = APPS[bid];
+        document.getElementById("missing-title").textContent = a.guide.h;
+        document.getElementById("missing-sub").textContent =
+          "Parece que o " + a.name + " ainda não está instalado.";
+        // guia
+        const g = document.getElementById("missing-guide");
+        let html = "<h3>" + a.guide.h + "</h3><ol>";
+        for (const s of a.guide.steps) html += "<li>" + s + "</li>";
+        html += "</ol>";
+        if (a.guide.ext) {
+          html += '<p style="margin:8px 0 0"><a id="ext-link">Abrir a extensão Claude Code ›</a></p>';
+        }
+        g.innerHTML = html;
+        if (a.guide.ext) {
+          document.getElementById("ext-link").addEventListener("click", () => ob.openExternal(a.guide.ext));
+        }
+        // botão baixar
+        const dl = document.getElementById("missing-download");
+        dl.textContent = "Baixar " + a.name;
+        dl.onclick = () => ob.openExternal(a.download);
+        // continuar (re-checa instalação)
+        document.getElementById("missing-continue").onclick = () => choose(bid);
+        // destaque "ou use o Claude Desktop" (VS Code/Cursor ausentes)
+        const alt = document.getElementById("missing-claude-alt");
+        if (bid !== CLAUDE) {
+          alt.innerHTML = '<button class="ghost" id="alt-claude" style="border-color:var(--purple);color:var(--purple-deep)">★ ou, mais fácil agora: usar o Claude Desktop</button>';
+          document.getElementById("alt-claude").onclick = () => choose(CLAUDE);
+        } else {
+          alt.innerHTML = "";
+        }
+      }
+
+      // wire dos botões do passo 1
+      document.querySelectorAll("#step-pick .opt").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          if (btn.dataset.other) { ob.openSettings(); return; }
+          choose(btn.dataset.bid);
+        });
+      });
+      document.getElementById("skip1").addEventListener("click", () => ob.done());
+      document.getElementById("missing-back").addEventListener("click", () => show("pick"));
+      document.getElementById("done-close").addEventListener("click", () => ob.done());
+    </script>
+  </body>
+</html>
