@@ -53,9 +53,10 @@
       .opt .ico {
         width: 38px; height: 38px; flex: 0 0 38px; border-radius: 10px;
         background: var(--lav-100); display: grid; place-items: center;
-        font-size: 19px;
+        font-size: 19px; overflow: hidden;
       }
       .opt.reco .ico { background: #fff; }
+      .opt .ico img { width: 100%; height: 100%; object-fit: cover; display: block; }
       .opt .txt { display: flex; flex-direction: column; }
       .badge {
         margin-left: auto; font-size: 10.5px; font-weight: 800;
@@ -109,6 +110,40 @@
         display: inline-block; background: #fff; border: 1px solid var(--lav-200);
         border-radius: 7px; padding: 2px 8px; font-weight: 800; color: var(--purple-deep);
       }
+      .pdot { font-size: 11px; color: #d0c9e6; vertical-align: 1px; margin-right: 2px; }
+      .pdot.on { color: var(--green); }
+      .permbtn {
+        margin-left: auto; flex: 0 0 auto; border: 1.5px solid var(--purple);
+        background: var(--purple); color: #fff; font-weight: 700; font-size: 12.5px;
+        border-radius: 9px; padding: 7px 13px; cursor: pointer; transition: opacity .15s;
+      }
+      .permbtn:hover { background: var(--purple-deep); }
+      .permbtn.done {
+        background: #eafaf0; color: var(--green); border-color: #bdeccd; cursor: default;
+      }
+      .opt.soon { opacity: .55; cursor: not-allowed; }
+      .opt.soon:hover { border-color: var(--lav-200); box-shadow: none; }
+      .opt.soon .ico img { filter: grayscale(.5); }
+      .soon-badge {
+        color: var(--muted); background: #f3f1fa; border-color: var(--lav-200);
+      }
+      .demo { width: 100%; display: flex; flex-direction: column; gap: 10px; margin: 8px 0 14px; }
+      .demo-row {
+        display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+        background: #fff; border: 1.5px solid var(--lav-200); border-radius: 13px;
+        opacity: .35; transform: translateY(4px); transition: all .3s;
+      }
+      .demo-row.on { opacity: 1; transform: translateY(0); border-color: var(--purple); box-shadow: 0 0 0 4px rgba(124,92,255,.12); }
+      .demo-n {
+        width: 26px; height: 26px; flex: 0 0 26px; border-radius: 999px;
+        background: var(--lav-100); color: var(--purple-deep); font-weight: 800;
+        display: grid; place-items: center; font-size: 13px;
+      }
+      .demo-row.on .demo-n { background: var(--purple); color: #fff; }
+      .demo-tx { display: flex; flex-direction: column; }
+      .demo-tx b { font-size: 14px; }
+      .demo-tx small { color: var(--muted); font-size: 12px; }
+      .demo-ico { margin-left: auto; font-size: 22px; }
     </style>
   </head>
   <body>
@@ -117,32 +152,91 @@
       <b>Capi</b>
     </div>
 
+    <!-- PASSO 0: permissões (primeiro de tudo) -->
+    <div class="step" id="step-perms">
+      <h1>Let's give Capi 2 permissions</h1>
+      <p class="sub">macOS needs these so Capi can capture your screen and type into your agent. One time only.</p>
+      <div class="options">
+        <div class="opt" id="row-screen">
+          <span class="ico">🖥️</span>
+          <span class="txt">
+            <span class="ttl"><span class="pdot" id="dot-screen">●</span> Screen Recording</span>
+            <span class="desc">to take the screenshot</span>
+          </span>
+          <button class="permbtn" data-perm="screen">Enable</button>
+        </div>
+        <div class="opt" id="row-ax">
+          <span class="ico">⌨️</span>
+          <span class="txt">
+            <span class="ttl"><span class="pdot" id="dot-ax">●</span> Accessibility</span>
+            <span class="desc">to paste &amp; send to your agent</span>
+          </span>
+          <button class="permbtn" data-perm="ax">Enable</button>
+        </div>
+        <div class="opt" id="row-mic">
+          <span class="ico">🎤</span>
+          <span class="txt">
+            <span class="ttl"><span class="pdot" id="dot-mic">●</span> Microphone <span style="color:var(--muted);font-weight:400">(optional)</span></span>
+            <span class="desc">to talk instead of type</span>
+          </span>
+          <button class="permbtn" data-perm="mic">Enable</button>
+        </div>
+      </div>
+      <div class="guide" id="perms-tip" style="margin-top:14px">
+        <h3>How it works</h3>
+        <ol>
+          <li>Click <b>Enable</b> — System Settings opens on the right panel.</li>
+          <li>Turn on the <b>Capi</b> 🦫 toggle (you may need to click 🔒 first).</li>
+          <li>If asked, choose <b>Quit &amp; Reopen</b> — Capi comes back here automatically.</li>
+        </ol>
+      </div>
+      <button class="primary" id="perms-continue">Continue</button>
+      <div class="skip"><a id="perms-skip">Skip for now</a></div>
+    </div>
+
     <!-- PASSO 1: escolher destino -->
-    <div class="step" id="step-pick">
+    <div class="step hidden" id="step-pick">
       <h1>Where do you want to send your context?</h1>
       <p class="sub">Pick the app that will receive your capture + text.</p>
       <div class="options">
-        <button class="opt reco" data-bid="com.anthropic.claudefordesktop">
-          <span class="ico">✨</span>
+        <button class="opt reco" data-bid="com.microsoft.VSCode">
+          <span class="ico"><img src="../../assets/integrations/vscode.png" alt="VS Code" /></span>
           <span class="txt">
-            <span class="ttl">★ Claude Desktop</span>
-            <span class="desc">easiest, works right away</span>
+            <span class="ttl">★ VS Code · Claude Code</span>
+            <span class="desc">let the agent read &amp; act on your files</span>
           </span>
           <span class="badge">RECOMMENDED</span>
         </button>
-        <button class="opt" data-bid="com.microsoft.VSCode">
-          <span class="ico">🧑‍💻</span>
+        <button class="opt" data-bid="com.anthropic.claudefordesktop">
+          <span class="ico"><img src="../../assets/integrations/claude-desktop.png" alt="Claude" /></span>
           <span class="txt">
-            <span class="ttl">VS Code</span>
-            <span class="desc">for coding (Claude Code)</span>
+            <span class="ttl">Claude Desktop (Chat)</span>
+            <span class="desc">screenshot + prompt straight to Claude chat</span>
           </span>
         </button>
-        <button class="opt" data-bid="com.todesktop.230313mzl4w4u92">
-          <span class="ico">⌨️</span>
+        <button class="opt soon" disabled>
+          <span class="ico"><img src="../../assets/integrations/cursor.png" alt="Cursor" /></span>
           <span class="txt">
             <span class="ttl">Cursor</span>
-            <span class="desc">for coding</span>
+            <span class="desc">agent coding</span>
           </span>
+          <span class="badge soon-badge">SOON</span>
+        </button>
+        <button class="opt soon" disabled>
+          <span class="ico"><img src="../../assets/integrations/whatsapp.png" alt="WhatsApp" /></span>
+          <span class="txt">
+            <span class="ttl">WhatsApp</span>
+            <span class="desc">send to a contact</span>
+          </span>
+          <span class="badge soon-badge">SOON</span>
+        </button>
+        <button class="opt soon" disabled>
+          <span class="ico"><img src="../../assets/integrations/telegram.png" alt="Telegram" /></span>
+          <span class="txt">
+            <span class="ttl">Telegram</span>
+            <span class="desc">send to a chat</span>
+          </span>
+          <span class="badge soon-badge">SOON</span>
         </button>
         <button class="opt" data-other="1">
           <span class="ico">➕</span>
@@ -172,7 +266,39 @@
       <h1>All set!</h1>
       <p class="sub" id="done-sub">Your destination is configured.</p>
       <p class="sub">Press <span class="kbd">⌘ ⇧ 2</span> on any screen to send to your agent.</p>
-      <button class="primary" id="done-close">Start using it</button>
+      <button class="primary" id="done-demo">▶ See how it works</button>
+      <button class="ghost" id="done-close">Start using it</button>
+    </div>
+
+    <!-- DEMO: como funciona (animação) -->
+    <div class="step hidden" id="step-demo">
+      <h1>How Capi works</h1>
+      <p class="sub">Three steps, every time.</p>
+      <div class="demo">
+        <div class="demo-row d-a">
+          <span class="demo-n">1</span>
+          <div class="demo-tx"><b>Press <span class="kbd">⌘ ⇧ 2</span></b><small>anywhere, on any screen</small></div>
+          <span class="demo-ico">⌨️</span>
+        </div>
+        <div class="demo-row d-b">
+          <span class="demo-n">2</span>
+          <div class="demo-tx"><b>Capture + talk</b><small>it grabs the screen and your voice</small></div>
+          <span class="demo-ico">🎙️</span>
+        </div>
+        <div class="demo-row d-c">
+          <span class="demo-n">3</span>
+          <div class="demo-tx"><b>Lands in your agent</b><small>image + text, sent for you</small></div>
+          <span class="demo-ico">🦫</span>
+        </div>
+      </div>
+      <div class="guide" style="margin-top:4px">
+        <h3>Tip</h3>
+        <ol>
+          <li>Keep <b>Claude</b> in <b>Chat</b> mode (not Code) to receive your captures.</li>
+          <li>Want the agent to read &amp; edit your files? Use <b>VS Code · Claude Code</b>.</li>
+        </ol>
+      </div>
+      <button class="primary" id="demo-back">Got it</button>
     </div>
 
     <script>
@@ -182,20 +308,54 @@
       const CURSOR = "com.todesktop.230313mzl4w4u92";
 
       const steps = {
+        perms: document.getElementById("step-perms"),
         pick: document.getElementById("step-pick"),
         missing: document.getElementById("step-missing"),
         done: document.getElementById("step-done"),
+        demo: document.getElementById("step-demo"),
       };
       function show(name) {
         for (const k in steps) steps[k].classList.toggle("hidden", k !== name);
       }
 
+      // ---- PASSO 0: permissões (status ao vivo) ----
+      function paintPerm(which, ok) {
+        const dot = document.getElementById("dot-" + which);
+        const btn = document.querySelector('.permbtn[data-perm="' + which + '"]');
+        if (dot) dot.classList.toggle("on", !!ok);
+        if (btn) {
+          btn.classList.toggle("done", !!ok);
+          btn.textContent = ok ? "✓ On" : "Enable";
+          btn.disabled = !!ok;
+        }
+      }
+      async function refreshPerms() {
+        try {
+          const s = await ob.permStatus();
+          paintPerm("screen", s.screen);
+          paintPerm("ax", s.ax);
+          paintPerm("mic", s.mic);
+          // habilita o Continue só quando as 2 essenciais estão ok
+          const cont = document.getElementById("perms-continue");
+          const ready = s.screen && s.ax;
+          cont.textContent = ready ? "Continue" : "Continue anyway";
+        } catch (_) {}
+      }
+      document.querySelectorAll("#step-perms .permbtn").forEach((b) => {
+        b.addEventListener("click", () => ob.openPerm(b.dataset.perm));
+      });
+      document.getElementById("perms-continue").addEventListener("click", () => show("pick"));
+      document.getElementById("perms-skip").addEventListener("click", () => show("pick"));
+      // re-checa enquanto a tela de permissões está aberta
+      setInterval(() => { if (!steps.perms.classList.contains("hidden")) refreshPerms(); }, 1500);
+      refreshPerms();
+
       // dados por destino (label, link de download, guia)
       const APPS = {
         [CLAUDE]: {
-          name: "Claude Desktop",
+          name: "Claude",
           download: "https://claude.ai/download",
-          guide: { h: "Download Claude Desktop", steps: ["Open the download link.", "Install and sign in to your Claude account.", "Come back here and click \"I already installed it\"."] },
+          guide: { h: "Download Claude Desktop", steps: ["Open the download link.", "Install and sign in to your Claude account.", "Open Claude and keep it in Chat mode.", "Come back here and click \"I already installed it\"."] },
         },
         [VSCODE]: {
           name: "VS Code",
@@ -256,7 +416,7 @@
         // destaque "ou use o Claude Desktop" (VS Code/Cursor ausentes)
         const alt = document.getElementById("missing-claude-alt");
         if (bid !== CLAUDE) {
-          alt.innerHTML = '<button class="ghost" id="alt-claude" style="border-color:var(--purple);color:var(--purple-deep)">★ or, easier right now: use Claude Desktop</button>';
+          alt.innerHTML = '<button class="ghost" id="alt-claude" style="border-color:var(--lav-200);color:var(--muted)">or use Claude Desktop instead (no install)</button>';
           document.getElementById("alt-claude").onclick = () => choose(CLAUDE);
         } else {
           alt.innerHTML = "";
@@ -266,6 +426,7 @@
       // wire dos botões do passo 1
       document.querySelectorAll("#step-pick .opt").forEach((btn) => {
         btn.addEventListener("click", () => {
+          if (btn.classList.contains("soon")) return; // em breve: não faz nada
           if (btn.dataset.other) { ob.openSettings(); return; }
           choose(btn.dataset.bid);
         });
@@ -273,6 +434,18 @@
       document.getElementById("skip1").addEventListener("click", () => ob.done());
       document.getElementById("missing-back").addEventListener("click", () => show("pick"));
       document.getElementById("done-close").addEventListener("click", () => ob.done());
+
+      // ---- DEMO animada (passo a passo em loop) ----
+      const demoRows = ["d-a", "d-b", "d-c"].map((c) => document.querySelector("#step-demo .demo-row." + c));
+      let demoIdx = 0, demoTimer = null;
+      function demoTick() {
+        demoRows.forEach((r, i) => r && r.classList.toggle("on", i === demoIdx));
+        demoIdx = (demoIdx + 1) % demoRows.length;
+      }
+      function startDemo() { stopDemo(); demoIdx = 0; demoTick(); demoTimer = setInterval(demoTick, 1300); }
+      function stopDemo() { if (demoTimer) { clearInterval(demoTimer); demoTimer = null; } }
+      document.getElementById("done-demo").addEventListener("click", () => { show("demo"); startDemo(); });
+      document.getElementById("demo-back").addEventListener("click", () => { stopDemo(); show("done"); });
     </script>
   </body>
 </html>

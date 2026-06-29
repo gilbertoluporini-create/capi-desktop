@@ -1,0 +1,10 @@
+{
+  "title": "Capi",
+  "icon-size": 100,
+  "background": "build/dmg-background.png",
+  "window": { "size": { "width": 540, "height": 380 } },
+  "contents": [
+    { "x": 140, "y": 185, "type": "file", "path": "dist/mac-arm64/Capi.app" },
+    { "x": 400, "y": 185, "type": "link", "path": "/Applications" }
+  ]
+}

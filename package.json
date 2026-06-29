@@ -28,7 +28,10 @@
       ],
       "category": "public.app-category.developer-tools",
       "icon": "assets/capi-app-icon.icns",
-      "identity": null
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
     },
     "win": {
       "target": [
@@ -43,7 +46,18 @@
       "allowToChangeInstallationDirectory": true
     },
     "dmg": {
-      "title": "Capi"
+      "title": "Capi",
+      "background": "build/dmg-background.png",
+      "iconSize": 100,
+      "iconTextSize": 13,
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        { "x": 140, "y": 185, "type": "file" },
+        { "x": 400, "y": 185, "type": "link", "path": "/Applications" }
+      ]
     }
   },
   "devDependencies": {

@@ -89,10 +89,17 @@ config = migrateAgents(config);
 
 // ---------- Apps (nível 1) — agrupam agentes (IA) ou contatos (mensageiro) ----------
 const KNOWN_APPS = [
-  { id: "vscode", name: "VS Code", bundleId: "com.microsoft.VSCode", type: "ai", avatar: "code", color: "#7c5cff" },
-  { id: "claude", name: "Claude", bundleId: "com.anthropic.claudefordesktop", type: "ai", avatar: "sparkles", color: "#5b3fd6" },
-  { id: "cursor", name: "Cursor", bundleId: "com.todesktop.230313mzl4w4u92", type: "ai", avatar: "terminal", color: "#22c55e" },
+  { id: "vscode", name: "VS Code", bundleId: "com.microsoft.VSCode", type: "ai", avatar: "img:../../assets/integrations/vscode.png", color: "#7c5cff" },
+  { id: "claude", name: "Claude", bundleId: "com.anthropic.claudefordesktop", type: "ai", avatar: "img:../../assets/integrations/claude-desktop.png", color: "#5b3fd6" },
+  { id: "cursor", name: "Cursor", bundleId: "com.todesktop.230313mzl4w4u92", type: "ai", avatar: "img:../../assets/integrations/cursor.png", color: "#22c55e" },
 ];
+
+// logo oficial por bundleId — usado pra atualizar avatares de apps já no config
+const APP_LOGO_BY_BUNDLE = {
+  "com.microsoft.VSCode": "img:../../assets/integrations/vscode.png",
+  "com.anthropic.claudefordesktop": "img:../../assets/integrations/claude-desktop.png",
+  "com.todesktop.230313mzl4w4u92": "img:../../assets/integrations/cursor.png",
+};
 
 // converte avatares antigos (emoji) -> nomes de ícone do set (icons.js)
 const EMOJI_TO_ICON = {
@@ -129,6 +136,20 @@ function migrateApps(cfg) {
 }
 config = migrateApps(config);
 config = migrateIcons(config);
+
+// força logos oficiais nos apps conhecidos (mesmo pra quem já tinha config)
+function migrateAppLogos(cfg) {
+  if (cfg.appLogosMigrated) return cfg;
+  let changed = false;
+  (cfg.apps || []).forEach((a) => {
+    const logo = APP_LOGO_BY_BUNDLE[a.bundleId];
+    if (logo && a.avatar !== logo) { a.avatar = logo; changed = true; }
+  });
+  cfg.appLogosMigrated = true;
+  if (changed) saveConfig(cfg);
+  return cfg;
+}
+config = migrateAppLogos(config);
 
 // achata apps+agentes numa lista de destinos pro overlay (captura — passo 1)
 function flattenDestinations() {
@@ -645,6 +666,7 @@ async function startCapture() {
   // atualiza a lista de projetos do Claude Code em background (pro PRÓXIMO overlay)
   setImmediate(refreshClaudeProjects);
   setImmediate(refreshOpenTabs);
+  setImmediate(refreshRunningApps);
   try {
     // guarda o app que está na frente ANTES do overlay roubar o foco
     frontmostApp = await getFrontmostApp();
@@ -690,6 +712,7 @@ async function startVoiceOnly() {
   capturing = true;
   setImmediate(refreshClaudeProjects);
   setImmediate(refreshOpenTabs);
+  setImmediate(refreshRunningApps);
   try {
     frontmostApp = await getFrontmostApp();
     const cursor = screen.getCursorScreenPoint();
@@ -756,6 +779,7 @@ function openOverlay(display, dataURL, voiceOnly) {
       frontmost: frontmostApp,
       agents: flattenDestinations(),
       appsTree: buildDestinationTree(),
+      openApps: buildOpenApps(),
       pinned: buildPinned(),
       agentDefault: config.captureDefault || config.agentDefault || "__last__",
       focusMode: config.focusMode || "switch",
@@ -817,6 +841,29 @@ function listRunningApps() {
       }
     );
   });
+}
+
+// cache dos apps abertos (pro "destino universal": mandar pra qualquer app)
+let runningAppsCache = [];
+function refreshRunningApps() {
+  listRunningApps()
+    .then((a) => { runningAppsCache = a || []; })
+    .catch(() => {});
+}
+// monta os apps abertos AGORA que ainda não são destinos configurados
+// (remove a própria Capi e os apps que já aparecem com seus sub-níveis)
+function buildOpenApps() {
+  const SELF = new Set(["com.luporini.capi", "com.github.Electron"]);
+  const configured = new Set((config.apps || []).map((a) => a.bundleId));
+  const seen = new Set();
+  return (runningAppsCache || [])
+    .filter((a) => {
+      if (!a.bundleId || SELF.has(a.bundleId) || configured.has(a.bundleId)) return false;
+      if (seen.has(a.bundleId)) return false;
+      seen.add(a.bundleId);
+      return true;
+    })
+    .map((a) => ({ name: a.name, bundleId: a.bundleId }));
 }
 
 // só ativa um app pelo bundleId (sem colar) — usado pra devolver o foco
@@ -1014,18 +1061,24 @@ async function pasteToClaudeDesktop({ note, submit, textOnly, newProject }) {
     await sh("osascript", ["-e", 'tell application "System Events" to keystroke "n" using command down']);
     await new Promise((r) => setTimeout(r, 600));
   }
-  // cola a imagem (se houver) e ESPERA ela anexar (~700ms > 400ms genéricos)
+  // cola a imagem (se houver) e ESPERA ela anexar de verdade. O Claude Desktop
+  // demora pra subir o anexo; se o Enter dispara antes, o envio fica BLOQUEADO
+  // (a caixa não envia com upload pendente) e o texto fica parado. Damos folga.
   if (!textOnly) {
     await sh("osascript", ["-e", 'tell application "System Events" to keystroke "v" using command down']);
-    await new Promise((r) => setTimeout(r, 700));
+    await new Promise((r) => setTimeout(r, 1600));
   }
   const text = (note || "").replace(/\s*\n\s*/g, " ").trim();
   if (text) {
     await typeNote(text);
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 200));
   }
-  // Enter ENVIA no Claude Desktop (Shift+Enter quebraria linha)
+  // Enter ENVIA no Claude Desktop (Shift+Enter quebraria linha).
+  // Reforço o foco da janela (a caixa) imediatamente antes, senão o Enter pode
+  // cair fora do compositor; e dou uma folga extra pro anexo terminar.
   if (submit) {
+    await new Promise((r) => setTimeout(r, 400));
+    await activateApp(CLAUDE_DESKTOP);
     await new Promise((r) => setTimeout(r, 250));
     await pressEnter();
   }
@@ -1079,6 +1132,69 @@ async function runPaste(opts) {
   }
   // tabMissed = pediu uma aba específica mas ela não estava aberta (colou na ativa)
   return { ok, tabMissed: tab.tried && !tab.switched, wanted: windowMatch || null };
+}
+
+// ---------- Envio no Windows (PowerShell + WScript.Shell SendKeys) ----------
+// bundleId (Mac) -> trecho do título da janela no Windows, p/ AppActivate
+const WIN_APP_TITLES = {
+  "com.microsoft.VSCode": "Visual Studio Code",
+  "com.anthropic.claudefordesktop": "Claude",
+  "com.todesktop.230313mzl4w4u92": "Cursor",
+};
+
+function psRun(script) {
+  return new Promise((resolve) => {
+    execFile(
+      "powershell",
+      ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script],
+      (err) => {
+        if (err) flog("ps erro: " + err.message);
+        resolve(!err);
+      }
+    );
+  });
+}
+// traz a janela do app (por título) pra frente
+function winActivate(title) {
+  if (!title) return Promise.resolve(false);
+  const t = String(title).replace(/'/g, "''");
+  return psRun("$ws = New-Object -ComObject WScript.Shell; $ws.AppActivate('" + t + "') | Out-Null; Start-Sleep -Milliseconds 120");
+}
+// envia teclas pro app em foco (ex: '^v' = Ctrl+V, '{ENTER}')
+function winSendKeys(keys) {
+  const k = String(keys).replace(/'/g, "''");
+  return psRun("$ws = New-Object -ComObject WScript.Shell; $ws.SendKeys('" + k + "')");
+}
+
+// equivalente Windows do runPaste: ativa destino -> cola imagem -> cola texto -> Enter
+async function runPasteWindows(opts) {
+  const { bundleId, note, submit, textOnly } = opts || {};
+  const title = WIN_APP_TITLES[bundleId] || null;
+  const text = (note || "").replace(/\s*\n\s*/g, " ").trim();
+  // 1) traz o app destino pra frente (se conhecido)
+  if (title) {
+    await winActivate(title);
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  // 2) cola a imagem (o clipboard já tem a imagem)
+  if (!textOnly) {
+    await winSendKeys("^v");
+    await new Promise((r) => setTimeout(r, 900)); // espera anexar
+  }
+  // 3) cola o texto (via clipboard p/ preservar acentos)
+  if (text) {
+    clipboard.writeText(text);
+    await new Promise((r) => setTimeout(r, 150));
+    await winSendKeys("^v");
+    await new Promise((r) => setTimeout(r, 180));
+  }
+  // 4) envia
+  if (submit) {
+    await new Promise((r) => setTimeout(r, 250));
+    await winSendKeys("{ENTER}");
+  }
+  flog("winPaste: title=" + (title || "-") + " img=" + !textOnly + " text=" + !!text + " submit=" + !!submit);
+  return { ok: true, tabMissed: false, wanted: null };
 }
 
 // ---------- Abrir frente: nova janela do VS Code + Claude Code + prompt inicial ----------
@@ -1301,7 +1417,7 @@ function openMainWindow() {
 // URL do painel web. Dev = servidor local; empacotado = site publicado. Override: CAPI_WEB_URL.
 const WEB_URL =
   process.env.CAPI_WEB_URL ||
-  (app.isPackaged ? "https://capi-sigma.vercel.app" : "http://localhost:3000");
+  (app.isPackaged ? "https://trycapi.com" : "http://localhost:3000");
 
 // ---------- Conta / Login (trial 20 usos → paywall) ----------
 // A anon key é PÚBLICA por design (RLS protege os dados) — pode ficar embutida.
@@ -1487,9 +1603,10 @@ ipcMain.handle("login:submit", async (_e, { email, password }) => {
   if (res.ok && loginWindow && !loginWindow.isDestroyed()) {
     loginWindow.close();
   }
-  // 1ª vez (pós-login): abre o onboarding pra escolher o destino do contexto
-  if (res.ok && !config.onboarded) {
-    setTimeout(() => openOnboardingWindow(), 250);
+  // pós-login: 1ª vez abre o onboarding (permissões + destino); senão, abre o app
+  if (res.ok) {
+    if (!config.onboarded) setTimeout(() => openOnboardingWindow(), 250);
+    else setTimeout(() => openMainWindow(), 250);
   }
   return res;
 });
@@ -1601,6 +1718,37 @@ ipcMain.handle("onboarding:setDefault", (_e, bundleId) => {
 
 ipcMain.on("onboarding:open-external", (_e, url) => {
   if (url) shell.openExternal(url);
+});
+
+// status ao vivo das permissões (pro passo guiado do onboarding)
+ipcMain.handle("onboarding:permStatus", () => {
+  if (process.platform !== "darwin") return { screen: true, ax: true, mic: true };
+  return {
+    screen: systemPreferences.getMediaAccessStatus("screen") === "granted",
+    ax: systemPreferences.isTrustedAccessibilityClient(false),
+    mic: systemPreferences.getMediaAccessStatus("microphone") === "granted",
+  };
+});
+
+// abre o painel de permissão certo e dispara o prompt nativo
+ipcMain.on("onboarding:openPerm", (_e, which) => {
+  if (process.platform !== "darwin") return;
+  if (which === "screen") {
+    triggerScreenPrompt();
+    shell.openExternal(
+      "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+    );
+  } else if (which === "ax") {
+    systemPreferences.isTrustedAccessibilityClient(true); // dispara o prompt
+    shell.openExternal(
+      "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+    );
+  } else if (which === "mic") {
+    try { systemPreferences.askForMediaAccess("microphone"); } catch (_) {}
+    shell.openExternal(
+      "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
+    );
+  }
 });
 
 // "Outro app" -> abre a config nativa pra escolher manualmente
@@ -2104,6 +2252,15 @@ ipcMain.handle("overlay:commit", async (_evt, payload) => {
           " tabMissed=" +
           tabMissed
       );
+    } else if (config.autoPaste && process.platform === "win32") {
+      const isLast = !targetBundle || targetBundle === "__last__";
+      const res = await runPasteWindows({
+        bundleId: isLast ? null : targetBundle,
+        note,
+        submit: config.autoSubmit !== false,
+        textOnly,
+      });
+      pasted = res.ok;
     }
 
     if (Notification.isSupported()) {
@@ -2392,6 +2549,7 @@ app.whenReady().then(async () => {
   registerShortcut();
   refreshClaudeProjects(); // popula o cache de projetos no boot
   refreshOpenTabs();
+  refreshRunningApps(); // popula a lista de apps abertos (destino universal)
 
   flog(
     "BOOT pid=" +
@@ -2406,12 +2564,17 @@ app.whenReady().then(async () => {
         : "n/a")
   );
 
-  // dispara o pedido de Gravação de Tela com o nome "Capi"
-  if (process.platform === "darwin" && !hasScreenPermission()) {
-    triggerScreenPrompt();
+  // Fluxo de abertura guiado (NÃO pedir permissão no boot — só depois do login):
+  //  - sem sessão  -> tela de LOGIN primeiro (não dá pra usar sem conta)
+  //  - logado + 1ª vez -> ONBOARDING (permissões guiadas + escolher destino)
+  //  - logado + já configurado -> app normal
+  if (!getSession()) {
+    openLoginWindow();
+  } else if (!config.onboarded) {
+    openOnboardingWindow();
+  } else {
+    openMainWindow();
   }
-
-  openMainWindow(); // mostra a interface ao abrir
 });
 
 app.on("will-quit", () => globalShortcut.unregisterAll());

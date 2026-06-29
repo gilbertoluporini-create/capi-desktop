@@ -127,10 +127,12 @@ let frontmostName = "where I was";
 let curProject = null;
 
 let pinnedList = [];
+let openAppsList = [];
 function buildTargets(data) {
   frontmostName = data.frontmost && data.frontmost.name ? data.frontmost.name : "where I was";
   tree = Array.isArray(data.appsTree) ? data.appsTree : [];
   pinnedList = Array.isArray(data.pinned) ? data.pinned : [];
+  openAppsList = Array.isArray(data.openApps) ? data.openApps : [];
   defaultId = data.agentDefault || "__last__";
   enterAppsLevel();
 }
@@ -158,6 +160,13 @@ function appsRows() {
     out.push({
       kind: "app", app, name: app.name, sub: appSub(app),
       avatar: app.avatar, color: app.color, descend: true,
+    })
+  );
+  // apps abertos AGORA — destino universal (manda direto pra qualquer um, sem configurar)
+  openAppsList.forEach((a) =>
+    out.push({
+      kind: "open-app", bundleId: a.bundleId, name: a.name,
+      sub: "send straight to this app", avatar: "grid", color: "#8b86a0",
     })
   );
   out.push({ kind: "last", name: "Last app", sub: frontmostName, avatar: "back", color: "#9b95ad" });
@@ -373,6 +382,7 @@ function selectedTarget() {
   if (r.kind === "conv-proj") return { id: r.project.id, name: r.project.name, bundleId: r.app.bundleId, windowMatch: r.project.windowMatch || null };
   if (r.kind === "contact") return { id: r.child.id, name: r.child.name, bundleId: r.app.bundleId, windowMatch: null };
   if (r.kind === "agent") return { id: r.child.id, name: r.child.name, bundleId: r.app.bundleId, windowMatch: r.child.windowMatch || (r.project && r.project.windowMatch) || null };
+  if (r.kind === "open-app") return { id: "open:" + r.bundleId, name: r.name, bundleId: r.bundleId, windowMatch: null };
   return { id: "__last__", bundleId: "__last__", windowMatch: null };
 }
 

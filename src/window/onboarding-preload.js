@@ -6,6 +6,10 @@ contextBridge.exposeInMainWorld("capiOnboarding", {
   pick: (bundleId) => ipcRenderer.invoke("onboarding:pick", bundleId),
   // confirma o destino como padrão + marca onboarded: { ok, name }
   setDefault: (bundleId) => ipcRenderer.invoke("onboarding:setDefault", bundleId),
+  // status ao vivo das permissões { screen, ax, mic }
+  permStatus: () => ipcRenderer.invoke("onboarding:permStatus"),
+  // abre o painel de permissão certo ("screen" | "ax" | "mic")
+  openPerm: (which) => ipcRenderer.send("onboarding:openPerm", which),
   // abre um link externo (baixar app / extensão)
   openExternal: (url) => ipcRenderer.send("onboarding:open-external", url),
   // "Outro app" -> abre a config nativa
