@@ -522,7 +522,14 @@ body.voice-only #toolbar {
   height: 100%;
   object-fit: cover;
 }
+/* logos (img:/capi:) = tile do próprio app icon (full-bleed), igual à landing.
+   Fundo branco só aparece nos cantos arredondados — nada de roxo vazando. */
+.dest-ico.is-logo {
+  background: #fff;
+  border: 1px solid rgba(30, 27, 46, 0.08);
+}
 .dest.active .dest-ico { background: var(--capi-purple-deep); }
+.dest.active .dest-ico.is-logo { background: #fff; }
 .dest-body { flex: 1; min-width: 0; }
 .dest-name {
   font-size: 14px;

@@ -1,5 +1,23 @@
 const $ = (id) => document.getElementById(id);
 
+// logos (img:/capi:) ficam em tile branco limpo (igual à landing) — sem fundo roxo
+function isLogoAvatar(av) {
+  return typeof av === "string" && (av.indexOf("img:") === 0 || av.indexOf("capi:") === 0);
+}
+// atributos do tile do ícone: logo -> classe is-logo; glifo -> fundo colorido
+function icoAttrs(av, color) {
+  return isLogoAvatar(av)
+    ? `class="agent-ico is-logo"`
+    : `class="agent-ico" style="background:${color || "#7c5cff"}"`;
+}
+// aplica o tratamento num elemento de cabeçalho já existente
+function applyIco(el, av, color) {
+  if (!el) return;
+  const logo = isLogoAvatar(av);
+  el.classList.toggle("is-logo", logo);
+  el.style.background = logo ? "" : (color || "#7c5cff");
+}
+
 // avatares-Capi (imagens) primeiro, depois ícones SVG
 const CAPI_AVATARS = ["capi:orquestrador", "capi:desktop", "capi:web", "capi:marca", "capi:qa", "capi:generico"];
 const ICON_AVATARS = ["compass", "sparkles", "robot", "hub", "rocket", "bolt", "star", "target", "layers", "globe", "chart", "cpu", "flask", "bookmark", "terminal", "code"];
@@ -96,7 +114,7 @@ function renderApps(s) {
     const div = document.createElement("div");
     div.className = "app-item";
     div.innerHTML =
-      `<span class="agent-ico" style="background:${app.color || "#7c5cff"}"></span>` +
+      `<span ${icoAttrs(app.avatar, app.color)}></span>` +
       `<div class="agent-txt"><b></b><small></small></div>` +
       `<span class="chev">${capiIcon("chevronRight", 18)}</span>`;
     div.querySelector(".agent-ico").innerHTML = avatarHTML(app.avatar || "grid", 20);
@@ -113,7 +131,7 @@ function renderAppScreen(s) {
   const app = appByBundle(s, currentApp);
   if (!app) { currentApp = null; currentProject = null; return renderApps(s); }
   $("app-head-ico").innerHTML = avatarHTML(app.avatar || "grid", 22);
-  $("app-head-ico").style.background = app.color || "#7c5cff";
+  applyIco($("app-head-ico"), app.avatar, app.color);
   $("app-head-name").textContent = app.name;
   $("app-head-type").textContent = app.type === "messenger" ? "Messenger" : "AI / code";
   $("app-search").checked = !!app.searchEnabled;
@@ -256,7 +274,7 @@ function paintProjectAgents(s, app, proj) {
     const div = document.createElement("div");
     div.className = "agent-item";
     div.innerHTML =
-      `<span class="agent-ico" style="background:${a.color || "#7c5cff"}"></span>` +
+      `<span ${icoAttrs(a.avatar, a.color)}></span>` +
       `<div class="agent-txt"><b></b><small></small></div>` +
       (canLaunch ? `<button class="agent-go" title="Open workstream (window + Claude Code + prompt)">${capiIcon("play", 15)}</button>` : ``) +
       `<button class="agent-pin ${isPinned ? "on" : ""}" title="${isPinned ? "Unpin" : "Pin to the top of the picker"}">${isPinned ? capiIcon("pinFilled", 16) : capiIcon("star", 16)}</button>` +

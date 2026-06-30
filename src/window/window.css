@@ -415,6 +415,11 @@ body {
   height: 100%;
   object-fit: cover;
 }
+/* logos (img:/capi:) num tile branco limpo — igual à landing, sem fundo roxo */
+.agent-ico.is-logo {
+  background: #fff !important;
+  border: 1px solid rgba(30, 27, 46, 0.08);
+}
 .agent-txt {
   flex: 1;
   min-width: 0;

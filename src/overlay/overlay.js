@@ -156,12 +156,20 @@ function appsRows() {
       avatar: p.avatar, color: p.color, pinned: true,
     })
   );
-  tree.forEach((app) =>
-    out.push({
-      kind: "app", app, name: app.name, sub: appSub(app),
-      avatar: app.avatar, color: app.color, descend: true,
-    })
-  );
+  tree.forEach((app) => {
+    if (app.type === "web") {
+      // agente de navegador: destino direto (clicar = enviar p/ aba do agente)
+      out.push({
+        kind: "web-app", app, name: app.name, sub: "send to this chat in your browser",
+        avatar: app.avatar, color: app.color,
+      });
+    } else {
+      out.push({
+        kind: "app", app, name: app.name, sub: appSub(app),
+        avatar: app.avatar, color: app.color, descend: true,
+      });
+    }
+  });
   // apps abertos AGORA — destino universal (manda direto pra qualquer um, sem configurar)
   openAppsList.forEach((a) =>
     out.push({
@@ -227,7 +235,7 @@ function enterAppsLevel() {
       idx = rows.findIndex((r) => r.kind === "last");
     } else {
       idx = rows.findIndex((r) =>
-        r.kind === "app" &&
+        (r.kind === "app" || r.kind === "web-app") &&
         (r.app.id === defaultId ||
           (r.app.projects || []).some((p) => p.id === defaultId || (p.agents || []).some((a) => a.id === defaultId))));
     }
@@ -239,9 +247,16 @@ function enterAppsLevel() {
 function enterMidLevel(app) {
   pickLevel = "projects"; curApp = app; curProject = null; searchQuery = "";
   rows = midRows(app);
-  // pré-seleciona a aba ATIVA (a "aqui"), senão a 1ª aba/projeto (pula "conversa atual")
-  let idx = rows.findIndex((r) => r.kind === "tab" && /you're here/.test(r.sub || ""));
-  if (idx < 0) idx = rows.length > 1 ? 1 : 0;
+  let idx;
+  if (app.type === "messenger") {
+    // mensageiro: padrão = "conversa atual" (índice 0). Nunca cair no "New contact"
+    // (Enter abriria o editor em vez de enviar) nem mirar um contato salvo à toa.
+    idx = 0;
+  } else {
+    // IA: pré-seleciona a aba ATIVA ("aqui"), senão a 1ª aba/projeto (pula "conversa atual")
+    idx = rows.findIndex((r) => r.kind === "tab" && /you're here/.test(r.sub || ""));
+    if (idx < 0) idx = rows.length > 1 ? 1 : 0;
+  }
   selIdx = idx;
   applySearchVisibility(); renderPicker();
 }
@@ -309,8 +324,11 @@ function renderPicker() {
       `<div class="dest-body"><div class="dest-name"></div><div class="dest-sub"></div></div>` +
       tail;
     const ico = row.querySelector(".dest-ico");
-    ico.innerHTML = avatarHTML(t.avatar || "robot", 18);
-    if (t.color && !isNew) ico.style.background = t.color;
+    const av = t.avatar || "robot";
+    const isLogo = typeof av === "string" && (av.indexOf("img:") === 0 || av.indexOf("capi:") === 0);
+    ico.innerHTML = avatarHTML(av, 18);
+    if (isLogo) ico.classList.add("is-logo");
+    else if (t.color && !isNew) ico.style.background = t.color;
     const nameEl = row.querySelector(".dest-name");
     if (t.pinned) {
       nameEl.innerHTML =
@@ -345,6 +363,7 @@ function activateRow() {
   const r = rows[selIdx];
   if (!r) return;
   if (r.kind === "app") return enterMidLevel(r.app);
+  if (r.kind === "web-app") { renderPicker(); return commit(); }
   if (r.kind === "project") return enterAgentsLevel(r.app, r.project);
   if (r.kind === "new-agent") {
     return window.capi.openAgentEditor({
@@ -376,6 +395,7 @@ function selectedTarget() {
   if (!r) return { id: "__last__", bundleId: "__last__", windowMatch: null };
   if (r.kind === "last") return { id: "__last__", name: "Last app", bundleId: "__last__", windowMatch: null };
   if (r.kind === "pin") return { id: r.pin.id, name: r.pin.name, bundleId: r.pin.bundleId, windowMatch: r.pin.windowMatch || null };
+  if (r.kind === "web-app") return { id: r.app.id, name: r.app.name, bundleId: r.app.bundleId, windowMatch: null, web: true, urlMatch: r.app.urlMatch || null };
   if (r.kind === "conv-app") return { id: r.app.id, name: r.app.name, bundleId: r.app.bundleId, windowMatch: null };
   if (r.kind === "new-project") return { id: "__newproj__", name: "New project", bundleId: r.app.bundleId, windowMatch: null, newProject: true };
   if (r.kind === "tab") return { id: "tab:" + r.name, name: r.name, bundleId: r.app.bundleId, windowMatch: r.windowMatch || r.name };
@@ -894,30 +914,44 @@ async function commit() {
     setStatus(`Sending to "${target.name || "destination"}" as soon as transcription finishes…`);
     return;
   }
-  committed = true;
   flushType(); // se ainda estava "digitando", completa o texto antes de enviar
-  const imageDataURL = voiceOnly ? null : composeDataURL(); // sem print no modo voz
-  const res = await window.capi.commit({
-    imageDataURL,
-    note: note.value,
-    targetId: target.id,
-    targetBundle: target.bundleId,
-    windowMatch: target.windowMatch || null,
-    focusMode,
-    newProject: target.newProject || false,
-  });
-  // GATE de conta: o main pode pedir login ou mostrar o paywall (20 usos grátis)
-  if (res && res.needLogin) {
-    committed = false; // deixa reenviar depois de logar
-    setStatus("Sign in to Capi to send — I opened the login. Then just press Enter.");
+  // voz-only SEM texto (transcrição falhou ou silêncio): não envia mensagem vazia
+  // (no Mac isso apertaria Enter num campo em branco) nem gasta 1 uso do trial.
+  if (voiceOnly && !note.value.trim()) {
+    setStatus("I didn't catch any words — tap record and try again.");
     return;
   }
-  if (res && res.paywall) {
+  committed = true;
+  try {
+    const imageDataURL = voiceOnly ? null : composeDataURL(); // sem print no modo voz
+    const res = await window.capi.commit({
+      imageDataURL,
+      note: note.value,
+      targetId: target.id,
+      targetBundle: target.bundleId,
+      windowMatch: target.windowMatch || null,
+      web: target.web || String(target.bundleId || "").indexOf("web.") === 0,
+      urlMatch: target.urlMatch || null,
+      focusMode,
+      newProject: target.newProject || false,
+    });
+    // GATE de conta: o main pode pedir login ou mostrar o paywall (20 usos grátis)
+    if (res && res.needLogin) {
+      committed = false; // deixa reenviar depois de logar
+      setStatus("Sign in to Capi to send — I opened the login. Then just press Enter.");
+      return;
+    }
+    if (res && res.paywall) {
+      committed = false;
+      showPaywall(res.payUrl);
+      return;
+    }
+    // sucesso → o main fecha o overlay.
+  } catch (e) {
+    // qualquer exceção (compose/IPC) NÃO pode travar o overlay em "committed"
     committed = false;
-    showPaywall(res.payUrl);
-    return;
+    setStatus("Something went wrong sending — press Enter to try again.");
   }
-  // sucesso → o main fecha o overlay.
 }
 
 // Paywall panel (free sends used up). Self-contained, doesn't rely on CSS.

@@ -94,6 +94,27 @@ const KNOWN_APPS = [
   { id: "cursor", name: "Cursor", bundleId: "com.todesktop.230313mzl4w4u92", type: "ai", avatar: "img:../../assets/integrations/cursor.png", color: "#22c55e" },
 ];
 
+// Agentes que rodam no NAVEGADOR (não têm app nativo). O "bundleId" aqui é um
+// pseudo-id estável (web.*) que serve só de chave; o envio real localiza a ABA
+// pela urlMatch em qualquer navegador (Chrome-family + Safari) e cola lá.
+const WEB_AGENTS = [
+  { id: "chatgpt-web",   name: "ChatGPT",    bundleId: "web.chatgpt",    type: "web", urlMatch: "chatgpt.com",        openUrl: "https://chatgpt.com/",          avatar: "img:../../assets/integrations/chatgpt.png",    color: "#10a37f" },
+  { id: "gemini-web",    name: "Gemini",     bundleId: "web.gemini",     type: "web", urlMatch: "gemini.google.com",   openUrl: "https://gemini.google.com/app", avatar: "img:../../assets/integrations/gemini.png",     color: "#1a73e8" },
+  { id: "claude-web",    name: "Claude.ai",  bundleId: "web.claude",     type: "web", urlMatch: "claude.ai",           openUrl: "https://claude.ai/new",         avatar: "img:../../assets/integrations/claude-ai.png",  color: "#d97757" },
+  { id: "perplexity-web",name: "Perplexity", bundleId: "web.perplexity", type: "web", urlMatch: "perplexity.ai",       openUrl: "https://www.perplexity.ai/",    avatar: "img:../../assets/integrations/perplexity.png", color: "#20808d" },
+];
+// urlMatch + openUrl por pseudo-bundle — usados no envio e na migração
+const WEB_URLMATCH_BY_BUNDLE = Object.fromEntries(WEB_AGENTS.map((w) => [w.bundleId, w.urlMatch]));
+const WEB_OPENURL_BY_MATCH = Object.fromEntries(WEB_AGENTS.map((w) => [w.urlMatch, w.openUrl]));
+
+// Mensageiros (WhatsApp/Telegram): colar imagem abre um preview com legenda;
+// digita a legenda e Enter envia na conversa ABERTA (v1 = "conversa atual").
+const MESSENGER_APPS = [
+  { id: "whatsapp", name: "WhatsApp", bundleId: "net.whatsapp.WhatsApp", type: "messenger", avatar: "img:../../assets/integrations/whatsapp.png", color: "#25d366" },
+  { id: "telegram", name: "Telegram", bundleId: "ru.keepcoder.Telegram", type: "messenger", avatar: "img:../../assets/integrations/telegram.png", color: "#2aabee" },
+];
+const MESSENGER_BUNDLES = new Set(MESSENGER_APPS.map((m) => m.bundleId));
+
 // logo oficial por bundleId — usado pra atualizar avatares de apps já no config
 const APP_LOGO_BY_BUNDLE = {
   "com.microsoft.VSCode": "img:../../assets/integrations/vscode.png",
@@ -151,10 +172,53 @@ function migrateAppLogos(cfg) {
 }
 config = migrateAppLogos(config);
 
+// injeta os agentes de navegador (ChatGPT/Gemini/Claude.ai/Perplexity) em quem
+// já tinha config. Idempotente: só adiciona os que faltam; atualiza urlMatch/type.
+function migrateWebAgents(cfg) {
+  cfg.apps = cfg.apps || [];
+  let changed = false;
+  WEB_AGENTS.forEach((w) => {
+    const existing = cfg.apps.find((a) => a.bundleId === w.bundleId);
+    if (!existing) {
+      cfg.apps.push({ ...w, searchEnabled: true });
+      changed = true;
+    } else {
+      // mantém o que o user customizou, mas garante os campos do envio web
+      if (existing.type !== "web") { existing.type = "web"; changed = true; }
+      if (existing.urlMatch !== w.urlMatch) { existing.urlMatch = w.urlMatch; changed = true; }
+    }
+  });
+  if (changed) saveConfig(cfg);
+  return cfg;
+}
+// Só no macOS por ora: o envio web/messenger usa AppleScript. No Windows
+// runPasteWindows ainda não trata web/messenger (colaria na janela errada),
+// então NÃO os injetamos no picker até existir suporte nativo lá.
+if (process.platform === "darwin") config = migrateWebAgents(config);
+
+// injeta WhatsApp/Telegram (mensageiros). Idempotente.
+function migrateMessengerApps(cfg) {
+  cfg.apps = cfg.apps || [];
+  let changed = false;
+  MESSENGER_APPS.forEach((m) => {
+    const existing = cfg.apps.find((a) => a.bundleId === m.bundleId);
+    if (!existing) {
+      cfg.apps.push({ ...m, searchEnabled: true });
+      changed = true;
+    } else if (existing.type !== "messenger") {
+      existing.type = "messenger";
+      changed = true;
+    }
+  });
+  if (changed) saveConfig(cfg);
+  return cfg;
+}
+if (process.platform === "darwin") config = migrateMessengerApps(config);
+
 // achata apps+agentes numa lista de destinos pro overlay (captura — passo 1)
 function flattenDestinations() {
   const out = [];
-  (config.apps || []).forEach((app) => {
+  platformVisibleApps().forEach((app) => {
     const mine = (config.agents || []).filter(
       (a) => a.app && a.app.bundleId === app.bundleId
     );
@@ -178,6 +242,8 @@ function flattenDestinations() {
           windowMatch: a.kind === "project" || a.target === "window" ? a.windowMatch : null,
         })
       );
+    } else if (app.type === "web") {
+      out.push({ id: app.id, name: app.name, subject: app.name, avatar: app.avatar, color: app.color, bundleId: app.bundleId, windowMatch: null, web: true, urlMatch: app.urlMatch || null });
     } else {
       out.push({ id: app.id, name: app.name, subject: "current conversation", avatar: app.avatar, color: app.color, bundleId: app.bundleId, windowMatch: null });
     }
@@ -356,15 +422,24 @@ function buildPinned() {
 
 // árvore de destinos pro overlay. IA: App -> Projetos -> Agentes. Mensageiro: App -> Contatos.
 // (o picker esconde projetos arquivados; a config mostra todos)
+// no Windows, esconde web/messenger (sem suporte de envio nativo lá ainda)
+function platformVisibleApps() {
+  const apps = config.apps || [];
+  if (process.platform === "darwin") return apps;
+  return apps.filter((a) => a.type !== "web" && a.type !== "messenger");
+}
 function buildDestinationTree() {
-  return (config.apps || []).map((app) => {
+  return platformVisibleApps().map((app) => {
     const type = app.type || "ai";
     const base = {
       id: app.id, name: app.name, avatar: app.avatar, color: app.color,
       bundleId: app.bundleId, type,
+      urlMatch: app.urlMatch || null,
       searchEnabled: app.searchEnabled !== false,
     };
     if (type === "messenger") return { ...base, contacts: appContacts(app) };
+    // agente de navegador: destino único (a aba do agente). Sem projetos/abas.
+    if (type === "web") return { ...base, web: true, projects: [], openTabs: [] };
     const projects = appProjects(app).filter((p) => !p.archived);
     // abas ABERTAS agora (envio direto via `edt`) — só VS Code por ora
     let openTabs = [];
@@ -1085,10 +1160,202 @@ async function pasteToClaudeDesktop({ note, submit, textOnly, newProject }) {
   return true;
 }
 
+// ---------- Agentes de navegador (ChatGPT/Gemini/Claude.ai/Perplexity) ----------
+// Navegadores Chrome-family (compartilham o MESMO dialeto AppleScript do Chrome).
+const CHROME_FAMILY = ["Google Chrome", "Brave Browser", "Microsoft Edge", "Arc", "Vivaldi", "Google Chrome Canary", "Chromium"];
+// um app está instalado? (checa /Applications e ~/Applications)
+function appInstalled(name) {
+  try {
+    return fs.existsSync(`/Applications/${name}.app`) ||
+      fs.existsSync(path.join(os.homedir(), "Applications", `${name}.app`));
+  } catch { return false; }
+}
+// 1º navegador que o Capi consegue SCRIPTAR (achar/focar aba). Usado pra abrir o
+// agente num navegador suportado — não no default do SO (que pode ser Firefox,
+// onde não conseguiríamos colar e abriríamos uma aba inútil a cada envio).
+function firstSupportedBrowser() {
+  const chrome = CHROME_FAMILY.find(appInstalled);
+  if (chrome) return chrome;
+  if (appInstalled("Safari")) return "Safari";
+  return null;
+}
+// app está RODANDO agora? (por bundleId). Na dúvida (erro), retorna true p/ não
+// bloquear o envio à toa. Usado p/ não colar num mensageiro fechado.
+function appRunning(bundleId) {
+  return new Promise((resolve) => {
+    if (!bundleId || bundleId === "__last__") return resolve(true);
+    execFile(
+      "osascript",
+      ["-e", `tell application "System Events" to return (exists (first application process whose bundle identifier is "${bundleId}"))`],
+      (err, stdout) => resolve(err ? true : String(stdout || "").trim() === "true")
+    );
+  });
+}
+function runOsa(lines, arg) {
+  return new Promise((resolve) => {
+    const args = [];
+    lines.forEach((l) => args.push("-e", l));
+    args.push(arg);
+    execFile("osascript", args, (err, stdout, stderr) => {
+      // loga erro de AppleScript (ex: permissão de automação do Safari negada),
+      // senão a falha vira NOTFOUND silencioso e ninguém descobre o porquê.
+      if (err) flog("osascript err: " + String(stderr || err.message || "").trim().slice(0, 200));
+      resolve({ out: String(stdout || "").trim(), err });
+    });
+  });
+}
+// Chrome-family: roda 1 osascript SÓ se houver pelo menos 1 instalado. Usa o
+// PRIMEIRO instalado como fonte do dialeto (`using terms from`) — assim a falta
+// do Google Chrome não quebra a busca (Brave/Edge/etc. servem de dialeto). Apps
+// não instalados na lista só erram no `tell` em runtime (capturado pelo try).
+async function focusTabChromeFamily(urlMatch) {
+  const installed = CHROME_FAMILY.filter(appInstalled);
+  if (!installed.length) return { found: false, browser: null };
+  const dictSrc = installed[0];
+  const listLiteral = "{" + installed.map((n) => `"${n}"`).join(", ") + "}";
+  const lines = [
+    "on run argv",
+    "set needle to item 1 of argv",
+    `set fam to ${listLiteral}`,
+    "repeat with bname in fam",
+    'tell application "System Events" to set isRunning to (exists (process (bname as string)))',
+    "if isRunning then",
+    "try",
+    `using terms from application "${dictSrc}"`,
+    "tell application (bname as string)",
+    "repeat with wi from 1 to (count of windows)",
+    "repeat with ti from 1 to (count of tabs of window wi)",
+    "if (URL of tab ti of window wi) contains needle then",
+    "set active tab index of window wi to ti",
+    "set index of window wi to 1",
+    "activate",
+    'return "OK:" & bname',
+    "end if",
+    "end repeat",
+    "end repeat",
+    "end tell",
+    "end using terms from",
+    "end try",
+    "end if",
+    "end repeat",
+    'return "NOTFOUND"',
+    "end run",
+  ];
+  const { out } = await runOsa(lines, urlMatch);
+  const found = out.indexOf("OK:") === 0;
+  return { found, browser: found ? out.slice(3) : null };
+}
+// Safari: osascript SEPARADO (compilação independente — não depende do Chrome).
+async function focusTabSafari(urlMatch) {
+  if (!appInstalled("Safari")) return { found: false, browser: null };
+  const lines = [
+    "on run argv",
+    "set needle to item 1 of argv",
+    'tell application "System Events" to set safRunning to (exists (process "Safari"))',
+    "if safRunning then",
+    "try",
+    'tell application "Safari"',
+    "repeat with wi from 1 to (count of windows)",
+    "repeat with ti from 1 to (count of tabs of window wi)",
+    "if (URL of tab ti of window wi) contains needle then",
+    "set current tab of window wi to tab ti of window wi",
+    "set index of window wi to 1",
+    "activate",
+    'return "OK:Safari"',
+    "end if",
+    "end repeat",
+    "end repeat",
+    "end tell",
+    "end try",
+    "end if",
+    'return "NOTFOUND"',
+    "end run",
+  ];
+  const { out } = await runOsa(lines, urlMatch);
+  const found = out.indexOf("OK:") === 0;
+  return { found, browser: found ? "Safari" : null };
+}
+// Foca a ABA cuja URL contém `urlMatch`. Tenta Chrome-family, depois Safari.
+// Retorna { found, browser }. NÃO cola nada — só posiciona.
+async function focusBrowserTab(urlMatch) {
+  if (!urlMatch) return { found: false, browser: null };
+  let r = await focusTabChromeFamily(urlMatch);
+  if (!r.found) r = await focusTabSafari(urlMatch);
+  flog(`focusBrowserTab "${urlMatch}" -> ${r.found ? r.browser : "NOTFOUND"}`);
+  return r;
+}
+
+// envio web: foca a aba do agente -> cola imagem -> digita texto -> Enter.
+// Se a aba não estiver aberta, NÃO cola (evita jogar no lugar errado) e avisa.
+async function runPasteWeb({ urlMatch, note, submit, returnTo, textOnly }) {
+  const text = (note || "").replace(/\s*\n\s*/g, " ").trim();
+  let { found, browser } = await focusBrowserTab(urlMatch);
+  let opened = false;
+  // aba não está aberta: ABRE o agente no navegador padrão e espera carregar.
+  if (!found) {
+    const openUrl = WEB_OPENURL_BY_MATCH[urlMatch] || ("https://" + urlMatch);
+    // abre num navegador SUPORTADO (não no default do SO) pra garantir que
+    // conseguimos achar+focar a aba depois. Sem suportado → falha cedo.
+    const br = firstSupportedBrowser();
+    if (!br) {
+      flog(`runPasteWeb: nenhum navegador suportado (Chrome-family/Safari) instalado`);
+      return { ok: false, tabMissed: true, wanted: urlMatch, notFound: true };
+    }
+    flog(`runPasteWeb: aba não aberta (${urlMatch}) — abrindo ${openUrl} em ${br}`);
+    await sh("open", ["-a", br, openUrl]);
+    opened = true;
+    // poll até a aba aparecer e focar (até ~8s), depois uma folga p/ a página montar
+    for (let i = 0; i < 16 && !found; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      ({ found, browser } = await focusBrowserTab(urlMatch));
+    }
+    if (!found) {
+      flog(`runPasteWeb: abri ${openUrl} mas a aba não apareceu a tempo`);
+      return { ok: false, tabMissed: true, wanted: urlMatch, notFound: true };
+    }
+    // composer da página recém-carregada precisa de mais tempo pra montar
+    await new Promise((r) => setTimeout(r, 2200));
+  }
+  // navegador ganhar foco do teclado (conteúdo da página, não a barra)
+  await new Promise((r) => setTimeout(r, opened ? 600 : 450));
+  // cola a imagem: o handler de paste da página anexa e foca o composer.
+  if (!textOnly) {
+    await sh("osascript", ["-e", 'tell application "System Events" to keystroke "v" using command down']);
+    await new Promise((r) => setTimeout(r, 1400)); // tempo do upload anexar
+  }
+  // Voz-only (sem imagem): nada focou o composer de forma confiável — a imagem é
+  // que ancora o cursor no campo. Então digitamos best-effort MAS não damos Enter
+  // (evita submeter no escuro) nem devolvemos o foco; o usuário revisa e envia.
+  const webManual = !!textOnly;
+  if (text) {
+    await typeNote(text);
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  // Enter envia (só com imagem colada, que garante o foco do composer)
+  if (submit && !webManual) {
+    await new Promise((r) => setTimeout(r, 300));
+    await pressEnter();
+  }
+  // ao ABRIR uma aba nova do agente, NÃO devolve o foco — senão a conversa fica
+  // pela metade numa aba que o usuário nem está vendo. Idem no modo manual (voz).
+  if (returnTo && !opened && !webManual) {
+    await new Promise((r) => setTimeout(r, 200));
+    await activateApp(returnTo);
+  }
+  return { ok: true, tabMissed: false, wanted: urlMatch, browser, webManual };
+}
+
 // auto-colar completo: foca destino (janela certa) + imagem + texto + enviar
 // opts: { bundleId, windowMatch, note, submit, returnTo }
 async function runPaste(opts) {
-  const { bundleId, windowMatch, note, submit, returnTo, textOnly, newProject } = opts || {};
+  const { bundleId, windowMatch, note, submit, returnTo, textOnly, newProject, web, urlMatch } = opts || {};
+  // Agente de navegador: localiza a ABA pela URL e cola lá
+  if (web || String(bundleId || "").indexOf("web.") === 0) {
+    return await runPasteWeb({
+      urlMatch: urlMatch || WEB_URLMATCH_BY_BUNDLE[bundleId],
+      note, submit, returnTo, textOnly,
+    });
+  }
   // Claude Desktop (app nativo) tem fluxo próprio — não passa pelo caminho genérico
   if (bundleId === CLAUDE_DESKTOP) {
     const ok = await pasteToClaudeDesktop({ note, submit, textOnly, newProject });
@@ -1097,6 +1364,12 @@ async function runPaste(opts) {
       await activateApp(returnTo);
     }
     return { ok, tabMissed: false, wanted: null };
+  }
+  // Mensageiro FECHADO: não dá pra colar numa conversa que não existe. Em vez de
+  // ativar/colar no escuro (cairia no app errado), aborta e pede pra abrir.
+  if (MESSENGER_BUNDLES.has(bundleId) && !(await appRunning(bundleId))) {
+    flog(`runPaste: ${bundleId} não está aberto — abortando (peça pra abrir)`);
+    return { ok: false, appNotRunning: true, wanted: null };
   }
   const focusChat = CLAUDE_CODE_HOSTS.has(bundleId);
   let tab = { tried: false, switched: false };
@@ -1115,8 +1388,12 @@ async function runPaste(opts) {
   // modo "só voz": foca o input mas NÃO cola imagem (não há)
   const ok = await activateAndPasteImage(bundleId, focusChat, !textOnly);
   const text = (note || "").replace(/\s*\n\s*/g, " ").trim();
-  // com imagem, espera ela ANEXAR antes de digitar; sem imagem, atraso curto
-  await new Promise((r) => setTimeout(r, textOnly ? 200 : (focusChat ? 750 : 400)));
+  // com imagem, espera ela ANEXAR antes de digitar; sem imagem, atraso curto.
+  // mensageiro (WhatsApp/Telegram): colar abre um PREVIEW com campo de legenda —
+  // demora mais que o input de um agente, então damos folga extra.
+  const isMsg = MESSENGER_BUNDLES.has(bundleId);
+  const pasteWait = textOnly ? 200 : (focusChat ? 750 : (isMsg ? 1200 : 400));
+  await new Promise((r) => setTimeout(r, pasteWait));
   if (text) {
     await typeNote(text);
     await new Promise((r) => setTimeout(r, 150));
@@ -1549,6 +1826,27 @@ async function checkUsage(retried) {
     // offline / DNS / servidor inacessível → FAIL-OPEN (deixa enviar).
     flog("usage erro de rede → fail-open: " + (e.message || e));
     return { status: "allowed", remaining: null, failOpen: true };
+  }
+}
+
+// Devolve 1 uso quando o gate contou mas o envio falhou de fato (ex.: aba do
+// agente não abriu). Best-effort: se falhar, o usuário só perde 1 uso (= hoje).
+async function refundUsage() {
+  const s = getSession();
+  if (!s) return;
+  try {
+    await fetch(`${WEB_URL}/api/usage`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${s.access_token}`,
+        "x-capi-key": TRANSCRIBE_SECRET,
+      },
+      body: JSON.stringify({ refund: true }),
+    });
+    flog("usage refund (envio falhou) ok");
+  } catch (e) {
+    flog("usage refund falhou: " + (e.message || e));
   }
 }
 
@@ -2096,6 +2394,8 @@ ipcMain.handle("overlay:commit", async (_evt, payload) => {
     windowMatch,
     focusMode: fm,
     newProject,
+    web,
+    urlMatch,
   } = payload || {};
   const focusMode = fm === "stay" ? "stay" : "switch";
   // modo "só voz": sem imagem -> manda só o texto transcrito
@@ -2172,6 +2472,10 @@ ipcMain.handle("overlay:commit", async (_evt, payload) => {
     let pasted = false;
     let tabMissed = false;
     let wantedChat = null;
+    let wasWeb = false;
+    let webNotFound = false;
+    let webManual = false;
+    let appNotRunning = false;
     // "Criar projeto"/nova conversa no Claude Desktop = ⌘N + cola + envia (fluxo próprio).
     if (newProject && targetBundle === CLAUDE_DESKTOP && process.platform === "darwin") {
       await new Promise((r) => setTimeout(r, 320));
@@ -2227,6 +2531,7 @@ ipcMain.handle("overlay:commit", async (_evt, payload) => {
       // outro Space expõe 0 janelas à automação até ser ativado (= a própria troca
       // que queremos evitar). "Ficar" suave só com o VS Code em JANELA no mesmo Space.
       await new Promise((r) => setTimeout(r, 320)); // foco volta pro app anterior
+      const isWeb = web || String(bundle || "").indexOf("web.") === 0;
       const res = await runPaste({
         bundleId: bundle,
         windowMatch: isLast ? null : windowMatch,
@@ -2234,10 +2539,16 @@ ipcMain.handle("overlay:commit", async (_evt, payload) => {
         submit: config.autoSubmit !== false,
         returnTo,
         textOnly,
+        web: isWeb,
+        urlMatch: urlMatch || WEB_URLMATCH_BY_BUNDLE[bundle],
       });
       pasted = res.ok;
       tabMissed = res.tabMissed;
       wantedChat = res.wanted;
+      wasWeb = isWeb;
+      webNotFound = !!res.notFound;
+      webManual = !!res.webManual;
+      appNotRunning = !!res.appNotRunning;
       flog(
         "autoPaste: isLast=" +
           isLast +
@@ -2263,24 +2574,48 @@ ipcMain.handle("overlay:commit", async (_evt, payload) => {
       pasted = res.ok;
     }
 
+    // envio falhou de fato (aba web não abriu OU mensageiro fechado) E o gate
+    // CONTOU este uso (gateRemaining numérico = não é paid nem fail-open) → estorna.
+    if (((wasWeb && webNotFound) || appNotRunning) && typeof gateRemaining === "number") {
+      await refundUsage();
+    }
+
     if (Notification.isSupported()) {
       // avisa quando a aba pedida não estava aberta (colou na aba ativa)
       const missTitle = tabMissed ? cleanTabQuery(wantedChat) : "";
-      new Notification({
-        title: tabMissed
-          ? "Capi · pasted into the active tab"
-          : pasted
-          ? "Capi · pasted into the chat!"
-          : "Capi · copied!",
-        body: tabMissed
-          ? `The chat "${missTitle}" wasn't open. Open it as a tab so I can aim right.`
-          : pasted
-          ? "Sent straight to the app that was open."
-          : config.autoPaste
+      let title, body;
+      if (appNotRunning) {
+        // mensageiro fechado — nada foi colado (evitamos cair no app errado)
+        title = "Capi · open the app first";
+        body = "That app isn't open. Open it (with the conversation you want), then send again — your free use wasn't spent.";
+      } else if (wasWeb && webNotFound) {
+        // tentamos abrir o agente no navegador e a aba não subiu a tempo
+        title = "Capi · couldn't reach the agent";
+        body = "I tried to open it in your browser but it didn't load in time. Open the agent tab and try again.";
+      } else if (wasWeb && webManual) {
+        // voz-only no navegador: digitamos mas não enviamos (composer pode não ter foco)
+        title = "Capi · text ready in your agent";
+        body = "Voice text typed into the agent tab. Click the box and press Enter to send (no screenshot = I don't auto-send in the browser).";
+      } else if (pasted && config.autoSubmit === false) {
+        // autoSubmit desligado: colou mas NÃO enviou — não dizer "sent"
+        title = "Capi · pasted — your turn";
+        body = "Image + context are in the box. Press Enter to send.";
+      } else if (wasWeb && pasted) {
+        title = "Capi · sent to your agent!";
+        body = "Pasted the image + context into the agent tab in your browser.";
+      } else if (tabMissed) {
+        title = "Capi · pasted into the active tab";
+        body = `The chat "${missTitle}" wasn't open. Open it as a tab so I can aim right.`;
+      } else if (pasted) {
+        title = "Capi · pasted into the chat!";
+        body = "Sent straight to the app that was open.";
+      } else {
+        title = "Capi · copied!";
+        body = config.autoPaste
           ? "Copied. Enable Capi in Accessibility so it can paste on its own."
-          : "Image + context on the clipboard, ready to paste.",
-        silent: !config.playSound,
-      }).show();
+          : "Image + context on the clipboard, ready to paste.";
+      }
+      new Notification({ title, body, silent: !config.playSound }).show();
     }
     return { ok: true, savedPath, pasted, remaining: gateRemaining };
   } catch (e) {
