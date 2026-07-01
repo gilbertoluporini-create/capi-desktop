@@ -612,10 +612,30 @@ async function startRecording() {
   setStatus("");
   startTimer();
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // constraint tolerante: no Windows alguns drivers rejeitam echoCancellation
+    // etc. — pedimos só `audio: true` e caímos pra {} se der OverconstrainedError.
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e0) {
+      if (e0 && e0.name === "OverconstrainedError") {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: {} });
+      } else {
+        throw e0;
+      }
+    }
     startVU(micStream);
     chunks = [];
-    mediaRecorder = new MediaRecorder(micStream, { mimeType: "audio/webm" });
+    // mimeType pode não ser suportado (ex.: alguns builds Windows) → deixa o
+    // navegador escolher se audio/webm não for suportado, senão MediaRecorder
+    // lança NotSupportedError e a gravação nunca começa.
+    let recOpts = {};
+    try {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported &&
+          MediaRecorder.isTypeSupported("audio/webm")) {
+        recOpts = { mimeType: "audio/webm" };
+      }
+    } catch (_) {}
+    mediaRecorder = new MediaRecorder(micStream, recOpts);
     mediaRecorder.ondataavailable = (e) => {
       if (e.data && e.data.size) {
         chunks.push(e.data);
@@ -627,14 +647,21 @@ async function startRecording() {
   } catch (e) {
     const name = (e && e.name) || "";
     const isWin = navigator.userAgent.includes("Windows");
+    // manda o diagnóstico pro main (vai pro capi-status.log) — sem isso a falha
+    // do mic fica só na tela e some, dificultando debugar o caso da mãe no Windows.
+    try { window.capi.micError && window.capi.micError(name || String(e)); } catch (_) {}
     recLabel.textContent = "No microphone";
     setMicRecording(false);
     noteListening.hidden = true;
     let msg = "No microphone access — you can type instead";
-    if (name === "NotAllowedError" || name === "SecurityError" || name === "NotReadableError") {
+    if (name === "NotAllowedError" || name === "SecurityError") {
+      // permissão negada (usuário ou política do SO)
       msg = isWin
-        ? "Windows is blocking the mic. Open Settings › Privacy › Microphone and turn on “Let desktop apps access your microphone”. Or just type."
+        ? "Windows is blocking the mic. Open Settings › Privacy › Microphone, turn on “Microphone access” and “Let desktop apps access your microphone”, then reopen Capi. Or just type."
         : "Mic permission denied — enable it in system settings, or type instead.";
+    } else if (name === "NotReadableError" || name === "AbortError") {
+      // hardware ocupado/travado por outro app (não é permissão) — diagnóstico distinto
+      msg = "Your mic is busy or unavailable (another app may be using it). Close it and try again, or type instead.";
     } else if (name === "NotFoundError" || name === "OverconstrainedError") {
       msg = "No microphone found — plug one in, or type instead.";
     }

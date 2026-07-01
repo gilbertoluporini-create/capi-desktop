@@ -337,15 +337,30 @@
           btn.disabled = !!ok;
         }
       }
+      let permsPlatformApplied = false;
       async function refreshPerms() {
         try {
           const s = await ob.permStatus();
+          // Windows: Gravação de Tela e Acessibilidade não existem (não pedem
+          // permissão). Esconde essas linhas e deixa só o microfone (a permissão
+          // que de fato bloqueava a gravação da mãe) + notificações.
+          if (!permsPlatformApplied && s.platform === "win32") {
+            permsPlatformApplied = true;
+            const rs = document.getElementById("row-screen");
+            const ra = document.getElementById("row-ax");
+            if (rs) rs.style.display = "none";
+            if (ra) ra.style.display = "none";
+            const h = document.querySelector("#step-perms h1");
+            const sub = document.querySelector("#step-perms .sub");
+            if (h) h.textContent = "Let's enable your microphone";
+            if (sub) sub.textContent = "Windows needs mic access so Capi can hear you. This step is optional — you can always type instead.";
+          }
           paintPerm("screen", s.screen);
           paintPerm("ax", s.ax);
           paintPerm("mic", s.mic);
-          // habilita o Continue só quando as 2 essenciais estão ok
+          // habilita o Continue: no Mac exige tela+AX; no Windows nada é obrigatório
           const cont = document.getElementById("perms-continue");
-          const ready = s.screen && s.ax;
+          const ready = s.platform === "win32" ? true : (s.screen && s.ax);
           cont.textContent = ready ? "Continue" : "Continue anyway";
         } catch (_) {}
       }

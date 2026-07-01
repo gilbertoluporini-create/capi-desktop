@@ -665,7 +665,9 @@ function listAppWindows(bundleId) {
 }
 
 // log em arquivo (pra ver status mesmo lançando via `open`, sem stdout)
-const FLOG = "/tmp/capi-status.log";
+// os.tmpdir() = /tmp no Mac e %TEMP% no Windows (não hardcodar "/tmp": no Windows
+// esse caminho não existe e todo flog() falharia silenciosamente).
+const FLOG = path.join(os.tmpdir(), "capi-status.log");
 function flog(msg) {
   try {
     fs.appendFileSync(FLOG, `[${new Date().toISOString()}] ${msg}\n`);
@@ -2385,8 +2387,22 @@ ipcMain.on("onboarding:open-external", (_e, url) => {
 
 // status ao vivo das permissões (pro passo guiado do onboarding)
 ipcMain.handle("onboarding:permStatus", () => {
-  if (process.platform !== "darwin") return { screen: true, ax: true, mic: true };
+  const platform = process.platform;
+  if (process.platform === "win32") {
+    // Windows: tela e "acessibilidade" não se aplicam (SendKeys não pede permissão),
+    // mas o MICROFONE sim — a mãe do dono não gravava porque o status vinha "true"
+    // falsamente e mascarava o pedido real. Consulta o status de verdade.
+    // getMediaAccessStatus pode devolver 'granted'|'denied'|'not-determined'|'unknown';
+    // só travamos como pendente quando explicitamente 'denied'.
+    let mic = true;
+    try {
+      mic = systemPreferences.getMediaAccessStatus("microphone") !== "denied";
+    } catch (_) {}
+    return { platform, screen: true, ax: true, mic };
+  }
+  if (process.platform !== "darwin") return { platform, screen: true, ax: true, mic: true };
   return {
+    platform,
     screen: systemPreferences.getMediaAccessStatus("screen") === "granted",
     ax: systemPreferences.isTrustedAccessibilityClient(false),
     mic: systemPreferences.getMediaAccessStatus("microphone") === "granted",
@@ -2395,6 +2411,15 @@ ipcMain.handle("onboarding:permStatus", () => {
 
 // abre o painel de permissão certo e dispara o prompt nativo
 ipcMain.on("onboarding:openPerm", (_e, which) => {
+  // Windows: só o microfone é uma permissão real (tela/AX não se aplicam ao
+  // SendKeys). Abre direto a página de Privacidade do Microfone do Windows, onde
+  // fica o "Let desktop apps access your microphone" — o que faltava pra mãe.
+  if (process.platform === "win32") {
+    if (which === "mic") {
+      shell.openExternal("ms-settings:privacy-microphone").catch(() => {});
+    }
+    return;
+  }
   if (process.platform !== "darwin") return;
   if (which === "screen") {
     triggerScreenPrompt();
@@ -2526,6 +2551,9 @@ ipcMain.on("win:capture", () => {
 });
 ipcMain.on("win:openScreenPrefs", () => promptScreenPermission());
 ipcMain.on("win:openAxPrefs", () => {
+  // Acessibilidade só existe no macOS; no Windows não há painel equivalente pro
+  // SendKeys e a API lançaria. Guarda por plataforma.
+  if (process.platform !== "darwin") return;
   systemPreferences.isTrustedAccessibilityClient(true);
   shell.openExternal(
     "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
@@ -2542,9 +2570,14 @@ ipcMain.on("win:openNotifPrefs", () => {
       }).show();
     }
   } catch (_) {}
-  shell.openExternal(
-    "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
-  );
+  // painel de notificações certo por SO (o URL x-apple não faz nada no Windows)
+  if (process.platform === "win32") {
+    shell.openExternal("ms-settings:notifications").catch(() => {});
+  } else if (process.platform === "darwin") {
+    shell.openExternal(
+      "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+    );
+  }
 });
 
 function sendWinState() {
@@ -2752,6 +2785,18 @@ ipcMain.on("win:openPanel", () => shell.openExternal(`${WEB_URL}/dashboard`));
 
 ipcMain.on("overlay:cancel", () => closeOverlay());
 
+// diagnóstico do microfone (vindo do overlay) — registra o erro + o status do SO
+// no capi-status.log. Essencial pra debugar o caso "não grava no Windows".
+ipcMain.on("overlay:micError", (_e, name) => {
+  let osStatus = "n/a";
+  try {
+    if (process.platform === "win32" || process.platform === "darwin")
+      osStatus = systemPreferences.getMediaAccessStatus("microphone");
+  } catch (err) { osStatus = "erro:" + (err.message || err); }
+  flog("MIC FAIL (" + process.platform + "): getUserMedia -> " + (name || "?") +
+    " | OS mic status: " + osStatus);
+});
+
 // toggle "ir pra tela" vs "mandar e ficar aqui" (persiste)
 ipcMain.on("overlay:setFocusMode", (_e, mode) => {
   config.focusMode = mode === "stay" ? "stay" : "switch";
@@ -2833,9 +2878,9 @@ ipcMain.handle("overlay:commit", async (_evt, payload) => {
     if (textOnly) {
       flog("commit (só voz): nota=" + JSON.stringify((note || "").slice(0, 60)));
     } else {
-      // DEBUG: salva a última imagem montada pra inspeção
+      // DEBUG: salva a última imagem montada pra inspeção (os.tmpdir p/ Windows)
       try {
-        fs.writeFileSync("/tmp/capi-last.png", img.toPNG());
+        fs.writeFileSync(path.join(os.tmpdir(), "capi-last.png"), img.toPNG());
         flog("commit: imagem salva, nota=" + JSON.stringify((note || "").slice(0, 60)));
       } catch {}
       // clipboard SÓ com a imagem: com imagem+texto juntos, o editor do Claude Code
@@ -3174,14 +3219,31 @@ ipcMain.handle("overlay:transcribe", async (_e, { base64, mime }) => {
 // ---------- Atalho global ----------
 function registerShortcut() {
   globalShortcut.unregisterAll();
-  const ok = globalShortcut.register(config.shortcut, startCapture);
+  // globalShortcut.register pode LANÇAR (acelerador inválido) além de devolver
+  // false (já registrado por outro app) — protege com try pra não derrubar o boot.
+  let ok = false;
+  try { ok = globalShortcut.register(config.shortcut, startCapture); }
+  catch (e) { flog("register erro (" + config.shortcut + "): " + (e.message || e)); }
   if (!ok) {
     console.warn("Não consegui registrar o atalho:", config.shortcut);
+    // feedback ao usuário: o atalho principal falhou (comum no Windows quando
+    // outro app já usa Ctrl+Shift+2). Sem isso, a Capi parecia "morta".
+    try {
+      if (Notification.isSupported()) {
+        new Notification({
+          title: "Capi · shortcut unavailable",
+          body: `Couldn't register ${config.shortcut} (another app may be using it). Open Capi and set a different shortcut, or use the tray icon.`,
+          silent: true,
+        }).show();
+      }
+    } catch (_) {}
   }
   // ⌘+Shift+1 — "só falar" (voz sem print)
   const vs = config.voiceShortcut;
+  let okV = false;
   if (vs) {
-    const okV = globalShortcut.register(vs, startVoiceOnly);
+    try { okV = globalShortcut.register(vs, startVoiceOnly); }
+    catch (e) { flog("register voz erro (" + vs + "): " + (e.message || e)); }
     if (!okV) console.warn("Não consegui registrar o atalho de voz:", vs);
     flog("atalhos: print=" + config.shortcut + " (" + ok + ") voz=" + vs + " (" + okV + ")");
   }
@@ -3190,13 +3252,35 @@ function registerShortcut() {
 
 // ---------- Tray ----------
 function buildTray() {
-  // contorno vazado da Capi como "template image": o macOS pinta de branco no
-  // menu escuro e preto no claro, automaticamente. (@2x carrega sozinho no Retina)
-  const iconPath = path.join(__dirname, "..", "..", "assets", "capiTemplate.png");
-  const trayImg = nativeImage.createFromPath(iconPath);
-  if (!trayImg.isEmpty()) trayImg.setTemplateImage(true);
+  let trayImg;
+  if (process.platform === "darwin") {
+    // macOS: contorno vazado como "template image" — o SO pinta de branco no menu
+    // escuro e preto no claro. (@2x carrega sozinho no Retina)
+    const iconPath = path.join(__dirname, "..", "..", "assets", "capiTemplate.png");
+    trayImg = nativeImage.createFromPath(iconPath);
+    if (!trayImg.isEmpty()) trayImg.setTemplateImage(true);
+  } else {
+    // Windows/Linux: NÃO usar template image (renderiza silhueta preta invisível
+    // na barra de tarefas). Usa o ícone colorido do app. .ico é o ideal na tray
+    // do Windows; caímos pro .png se não existir.
+    const ico = path.join(__dirname, "..", "..", "assets", "capi-app-icon.ico");
+    const png = path.join(__dirname, "..", "..", "assets", "capi-app-icon.png");
+    let src = null;
+    try { if (fs.existsSync(ico)) src = ico; } catch (_) {}
+    if (!src) { try { if (fs.existsSync(png)) src = png; } catch (_) {} }
+    trayImg = src ? nativeImage.createFromPath(src) : nativeImage.createEmpty();
+    // a tray do Windows espera ~16x16; redimensiona se o PNG for grande
+    if (!trayImg.isEmpty()) {
+      try { trayImg = trayImg.resize({ width: 16, height: 16 }); } catch (_) {}
+    }
+  }
   tray = new Tray(trayImg.isEmpty() ? nativeImage.createEmpty() : trayImg);
   tray.setToolTip("Capi — capture to your agent");
+  // Windows: clique esquerdo no ícone da bandeja normalmente abre o app (no Mac o
+  // clique já abre o menu de contexto, então só ligamos isso fora do Mac).
+  if (process.platform !== "darwin") {
+    tray.on("click", () => openMainWindow());
+  }
   refreshTrayMenu();
 }
 
@@ -3248,7 +3332,13 @@ function refreshTrayMenu() {
       click: (item) => {
         config.autoPaste = item.checked;
         saveConfig(config);
-        if (item.checked && !systemPreferences.isTrustedAccessibilityClient(false)) {
+        // isTrustedAccessibilityClient é macOS-only e LANÇA no Windows — guarda por
+        // plataforma pra não derrubar o clique do menu da bandeja no Windows.
+        if (
+          process.platform === "darwin" &&
+          item.checked &&
+          !systemPreferences.isTrustedAccessibilityClient(false)
+        ) {
           systemPreferences.isTrustedAccessibilityClient(true);
         }
       },
@@ -3308,6 +3398,28 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionCheckHandler((_wc, perm) =>
     allowPerms.has(perm)
   );
+  // CRÍTICO (Windows): sem este handler, o Chromium do Electron NEGA por padrão
+  // o acesso ao DISPOSITIVO de mídia (câmera/microfone), mesmo com o request handler
+  // acima liberado — foi o que impediu a gravação do microfone no Windows. Aqui
+  // liberamos os devices de áudio (o getUserMedia do overlay só pede `audio`).
+  try {
+    session.defaultSession.setDevicePermissionHandler((details) => {
+      // details.deviceType: 'hid' | 'serial' | 'usb'... e p/ mídia vem via
+      // permission 'media' — liberamos áudio/entrada por padrão pro fluxo da Capi.
+      return true;
+    });
+  } catch (_) {}
+  // No Windows, mostrar o prompt/registro de privacidade do microfone cedo evita
+  // o erro silencioso de "sem permissão" na 1ª gravação. askForMediaAccess é
+  // macOS-only, então guardamos por plataforma (no Mac o onboarding já cuida disso).
+  if (process.platform === "win32") {
+    try {
+      const st = systemPreferences.getMediaAccessStatus("microphone");
+      flog("BOOT win mic status: " + st);
+    } catch (e) {
+      flog("BOOT win mic status erro: " + (e.message || e));
+    }
+  }
 
   buildTray();
   registerShortcut();
