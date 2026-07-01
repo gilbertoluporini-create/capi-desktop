@@ -944,10 +944,13 @@ function ensureNotifWindow() {
     },
   });
   notifWindow.setAlwaysOnTop(true, "screen-saver");
-  notifWindow.setVisibleOnAllWorkspaces(true, {
-    visibleOnFullScreen: true,
-    skipTransformProcessType: true,
-  });
+  // opção com flags Mac-only (skipTransformProcessType) — só no macOS.
+  if (process.platform === "darwin") {
+    notifWindow.setVisibleOnAllWorkspaces(true, {
+      visibleOnFullScreen: true,
+      skipTransformProcessType: true,
+    });
+  }
   notifWindow.loadFile(path.join(__dirname, "..", "notif", "notif.html"));
   notifWindow.on("closed", () => {
     notifWindow = null;
@@ -1001,6 +1004,11 @@ async function notifReply() {
   const t = lastSentTarget;
   if (!t) return;
   try {
+    if (process.platform === "win32") {
+      // no Windows não há AppleScript: traz a janela pela frente por título.
+      if (t.bundleId) await winActivate(WIN_APP_TITLES[t.bundleId] || t.from);
+      return;
+    }
     if (t.web && t.urlMatch) {
       await focusBrowserTab(t.urlMatch);
     } else if (t.bundleId) {
@@ -1141,7 +1149,8 @@ function stopReplyWatch() {
 // vigia a janela do agente; quando a resposta PARA de mudar, dispara a notificação.
 // opts: { title, keywords, from, avatar, target }
 async function watchForReply(opts = {}) {
-  if (process.platform !== "darwin") return;
+  // núcleo cross-platform: desktopCapturer + diff de bitmap (não usa AppleScript).
+  if (process.platform !== "darwin" && process.platform !== "win32") return;
   stopReplyWatch(); // um envio por vez
   const myGen = replyWatchGen;
   const { title, keywords, from, avatar, target } = opts;
@@ -1756,6 +1765,11 @@ const WIN_APP_TITLES = {
   "com.anthropic.claudefordesktop": "Claude",
   "com.todesktop.230313mzl4w4u92": "Cursor",
 };
+// apps onde dá pra focar o chat certo via Quick Open ("edt <título>")
+const WIN_QUICKOPEN_BUNDLES = new Set([
+  "com.microsoft.VSCode",
+  "com.todesktop.230313mzl4w4u92",
+]);
 
 function psRun(script) {
   return new Promise((resolve) => {
@@ -1780,36 +1794,95 @@ function winSendKeys(keys) {
   const k = String(keys).replace(/'/g, "''");
   return psRun("$ws = New-Object -ComObject WScript.Shell; $ws.SendKeys('" + k + "')");
 }
+// digita texto LITERAL via SendKeys (escapa os metacaracteres +^%~(){}[])
+function winSendKeysText(text) {
+  const esc = String(text || "").replace(/([+^%~(){}\[\]])/g, "{$1}");
+  return winSendKeys(esc);
+}
 
-// equivalente Windows do runPaste: ativa destino -> cola imagem -> cola texto -> Enter
+// roda PowerShell e devolve o stdout (p/ scripts que confirmam o que fizeram)
+function psRunOut(script) {
+  return new Promise((resolve) => {
+    execFile(
+      "powershell",
+      ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script],
+      (err, stdout) => {
+        if (err) flog("ps erro: " + err.message);
+        resolve(err ? null : String(stdout || "").trim());
+      }
+    );
+  });
+}
+
+// equivalente Windows do runPaste — a sequência inteira roda numa ÚNICA sessão de
+// PowerShell: ativa a janela alvo e CONFIRMA que ela ficou em primeiro plano antes
+// de colar (o overlay que acabou de fechar ainda pode segurar o foco por ~1s — era
+// isso que engolia o Ctrl+V da imagem e só o texto chegava), cola a imagem, espera
+// anexar, cola o texto (base64 p/ preservar acentos) e dá Enter.
 async function runPasteWindows(opts) {
-  const { bundleId, note, submit, textOnly } = opts || {};
+  const { bundleId, windowMatch, note, submit, textOnly } = opts || {};
   const title = WIN_APP_TITLES[bundleId] || null;
   const text = (note || "").replace(/\s*\n\s*/g, " ").trim();
-  // 1) traz o app destino pra frente (se conhecido)
+  const lines = [
+    "$sig = '[DllImport(\"user32.dll\")] public static extern System.IntPtr GetForegroundWindow(); [DllImport(\"user32.dll\")] public static extern int GetWindowText(System.IntPtr h, System.Text.StringBuilder s, int n);'",
+    "Add-Type -MemberDefinition $sig -Name U32 -Namespace Capi | Out-Null",
+    "$ws = New-Object -ComObject WScript.Shell",
+    "function FgTitle { $b = New-Object System.Text.StringBuilder 512; [Capi.U32]::GetWindowText([Capi.U32]::GetForegroundWindow(), $b, 512) | Out-Null; $b.ToString() }",
+    "$activated = 'none'",
+  ];
   if (title) {
-    await winActivate(title);
-    await new Promise((r) => setTimeout(r, 400));
+    const t = title.replace(/'/g, "''");
+    lines.push(
+      "$activated = 'false'",
+      "for ($i = 0; $i -lt 25; $i++) {",
+      "  $null = $ws.AppActivate('" + t + "')",
+      "  Start-Sleep -Milliseconds 100",
+      "  if ((FgTitle) -like '*" + t + "*') { $activated = 'true'; break }",
+      "}",
+      "Start-Sleep -Milliseconds 250"
+    );
+  } else {
+    // sem alvo conhecido: dá um respiro pro foco assentar no app da frente
+    lines.push("Start-Sleep -Milliseconds 350");
   }
-  // 2) cola a imagem (o clipboard já tem a imagem)
+  // a sessão longa APENAS ativa e confirma o foco — keystroke lá de dentro solta
+  // o Ctrl e digita "v" literal (visto 2x nos testes, mesmo com activated=true).
+  // TODAS as teclas vão por processo próprio (winSendKeys), o caminho 3-de-3.
+  lines.push("Write-Output ('activated=' + $activated)");
+  const out = await psRunOut(lines.join("\n"));
+  // roteia pro CHAT certo dentro da janela (vale pra ABA e pra SPLIT): Quick Open
+  // "edt <título>" foca o editor cujo título casa — mesmo truque do Mac (focusEditorTab).
+  const wanted = windowMatch ? cleanTabQuery(windowMatch) : "";
+  if (wanted && WIN_QUICKOPEN_BUNDLES.has(bundleId)) {
+    await winSendKeys("^p");
+    await new Promise((r) => setTimeout(r, 500));
+    await winSendKeysText("edt " + wanted);
+    await new Promise((r) => setTimeout(r, 550));
+    await winSendKeys("{ENTER}");
+    await new Promise((r) => setTimeout(r, 350));
+    await winSendKeys("{ESC}"); // sem match o Enter não fecha o Quick Open — Esc garante
+    await new Promise((r) => setTimeout(r, 250));
+  }
   if (!textOnly) {
+    await new Promise((r) => setTimeout(r, 350)); // foco confirmado assenta
     await winSendKeys("^v");
-    await new Promise((r) => setTimeout(r, 900)); // espera anexar
+    await new Promise((r) => setTimeout(r, 1100)); // espera a imagem anexar
   }
-  // 3) cola o texto (via clipboard p/ preservar acentos)
   if (text) {
     clipboard.writeText(text);
     await new Promise((r) => setTimeout(r, 150));
     await winSendKeys("^v");
     await new Promise((r) => setTimeout(r, 180));
   }
-  // 4) envia
   if (submit) {
     await new Promise((r) => setTimeout(r, 250));
     await winSendKeys("{ENTER}");
   }
-  flog("winPaste: title=" + (title || "-") + " img=" + !textOnly + " text=" + !!text + " submit=" + !!submit);
-  return { ok: true, tabMissed: false, wanted: null };
+  flog(
+    "winPaste: title=" + (title || "-") + " chat=" + (wanted || "-") + " img=" + !textOnly +
+      " text=" + !!text + " submit=" + !!submit + " " + (out || "ps-fail")
+  );
+  return { ok: true, tabMissed: false, wanted: wanted || null };
 }
 
 // ---------- Abrir frente: nova janela do VS Code + Claude Code + prompt inicial ----------
@@ -3045,13 +3118,37 @@ ipcMain.handle("overlay:commit", async (_evt, payload) => {
       }
     } else if (config.autoPaste && process.platform === "win32") {
       const isLast = !targetBundle || targetBundle === "__last__";
+      const bundle = isLast ? null : targetBundle;
       const res = await runPasteWindows({
-        bundleId: isLast ? null : targetBundle,
+        bundleId: bundle,
+        windowMatch,
         note,
         submit: config.autoSubmit !== false,
         textOnly,
       });
       pasted = res.ok;
+      // registra o destino (pro botão "Responder") e liga a vigia de resposta —
+      // mesma ideia do Mac: observa a janela do agente por screenshot (desktopCapturer)
+      // e dispara a telinha da capivara quando a resposta para de mudar.
+      if (pasted && bundle && !MESSENGER_BUNDLES.has(bundle)) {
+        const dest = flattenDestinations().find((d) => d.bundleId === bundle);
+        lastSentTarget = {
+          from: (dest && dest.name) || bundle,
+          avatar: dest && dest.avatar,
+          bundleId: bundle,
+          urlMatch: null,
+          web: false,
+        };
+        const winTitleKw = (WIN_APP_TITLES[bundle] || "").toLowerCase();
+        const kw = [...replyKeywords(lastSentTarget.from, null), winTitleKw].filter(Boolean);
+        watchForReply({
+          title: isLast ? null : windowMatch,
+          keywords: kw,
+          from: lastSentTarget.from,
+          avatar: lastSentTarget.avatar,
+          target: lastSentTarget,
+        });
+      }
     }
 
     // envio falhou de fato (aba web não abriu OU mensageiro fechado) E o gate
@@ -3391,6 +3488,8 @@ function setDockIcon() {
 }
 
 app.whenReady().then(async () => {
+  if (process.platform === "win32") app.setAppUserModelId("com.luporini.capi");
+
   if (process.platform === "darwin" && app.dock) {
     app.dock.hide(); // app de menu bar
     setDockIcon();
