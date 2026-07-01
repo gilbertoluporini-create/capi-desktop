@@ -1,6 +1,6 @@
 {
   "name": "capi-desktop",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Capi — captura de tela + contexto direto pro clipboard do seu agente",
   "main": "src/main/main.js",
   "author": "Gilberto Luporini",

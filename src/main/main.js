@@ -2293,6 +2293,12 @@ function openPayWindow(payUrl) {
 function isAppInstalled(bundleId) {
   return new Promise((resolve) => {
     if (!bundleId) return resolve(false);
+    // agentes web rodam no navegador — sempre "instalados"
+    if (String(bundleId).startsWith("web.")) return resolve(true);
+    // Windows/Linux não têm bundle id nem osascript: a checagem por AppleScript
+    // sempre falharia e prenderia o usuário no "não instalado". Confia no usuário
+    // (ele clicou em "I already installed it") e deixa seguir.
+    if (process.platform !== "darwin") return resolve(true);
     const script = `tell application "Finder" to return (exists application file id "${bundleId}")`;
     execFile("osascript", ["-e", script], (err, stdout) => {
       if (err) return resolve(false);
