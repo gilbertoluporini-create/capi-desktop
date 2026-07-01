@@ -3222,6 +3222,25 @@ ipcMain.handle("overlay:transcribe", async (_e, { base64, mime }) => {
   }
 });
 
+// debug do overlay (Track A) — surfaceia no capi-status.log
+ipcMain.on("overlay:dbg", (_e, msg) => { flog("[overlay] " + msg); });
+
+// pega um token temporário do Deepgram no backend (chave-mestra fica no servidor)
+ipcMain.handle("overlay:deepgramToken", async () => {
+  try {
+    const r = await fetch(`${WEB_URL}/api/deepgram-token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-capi-key": TRANSCRIBE_SECRET },
+      body: JSON.stringify({}),
+    });
+    if (!r.ok) { flog("deepgram-token HTTP " + r.status); return { ok: false }; }
+    return await r.json();
+  } catch (e) {
+    flog("deepgram-token erro: " + (e.message || e));
+    return { ok: false };
+  }
+});
+
 // ---------- Atalho global ----------
 function registerShortcut() {
   globalShortcut.unregisterAll();

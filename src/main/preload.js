@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld("capi", {
   cancel: () => ipcRenderer.send("overlay:cancel"),
   commit: (payload) => ipcRenderer.invoke("overlay:commit", payload),
   transcribe: (payload) => ipcRenderer.invoke("overlay:transcribe", payload),
+  deepgramToken: () => ipcRenderer.invoke("overlay:deepgramToken"),
+  dbg: (msg) => ipcRenderer.send("overlay:dbg", msg),
   setFocusMode: (mode) => ipcRenderer.send("overlay:setFocusMode", mode),
   setAutoRecord: (on) => ipcRenderer.send("overlay:setAutoRecord", on),
   openAgentEditor: (bundleId) => ipcRenderer.send("overlay:openAgentEditor", bundleId),

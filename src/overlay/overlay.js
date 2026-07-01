@@ -103,6 +103,7 @@ idleCancel.addEventListener("click", (e) => {
 cancelBtn.addEventListener("click", (e) => {
   e.stopPropagation();
   if (micStream) micStream.getTracks().forEach((t) => t.stop());
+  dgStop();
   window.capi.cancel();
 });
 
@@ -589,6 +590,12 @@ let audioCtx = null;
 let analyser = null;
 let vuRAF = null;
 
+// ----- Deepgram streaming (Track A): transcrição palavra-por-palavra ao vivo -----
+let dgWs = null;        // WebSocket
+let dgPipe = null;      // { ctx, src, proc, mute }
+let dgActive = false;   // conectado e recebendo
+let dgFinalText = "";   // acúmulo dos trechos finais
+
 async function startRecording() {
   state = "recording";
   committed = false;
@@ -610,6 +617,7 @@ async function startRecording() {
   editing = false;
   noteListening.hidden = false;
   setStatus("");
+  dgStop(); // fecha qualquer sessão Deepgram anterior antes de começar
   startTimer();
   try {
     // constraint tolerante: no Windows alguns drivers rejeitam echoCancellation
@@ -639,11 +647,12 @@ async function startRecording() {
     mediaRecorder.ondataavailable = (e) => {
       if (e.data && e.data.size) {
         chunks.push(e.data);
-        liveTranscribe();
+        if (!dgActive) liveTranscribe(); // DG ativo cuida do ao vivo; Whisper só se DG cair
       }
     };
     mediaRecorder.onstop = finalizeTranscription;
     mediaRecorder.start(2000);
+    dgStart(micStream); // streaming palavra-por-palavra; se falhar, Whisper assume sozinho
   } catch (e) {
     const name = (e && e.name) || "";
     const isWin = navigator.userAgent.includes("Windows");
@@ -760,6 +769,90 @@ async function liveTranscribe() {
   transcribing = false;
 }
 
+// ---------- Deepgram: streaming ao vivo (palavra-por-palavra) ----------
+function floatTo16(f32) {
+  const out = new Int16Array(f32.length);
+  for (let i = 0; i < f32.length; i++) {
+    const s = Math.max(-1, Math.min(1, f32[i]));
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return out;
+}
+
+// abre o WS do Deepgram e começa a mandar PCM 16k do microfone
+async function dgStart(stream) {
+  dgActive = false;
+  dgFinalText = "";
+  const dbg = (m) => { try { window.capi.dbg && window.capi.dbg("DG " + m); } catch {} };
+  let tok;
+  try { tok = await window.capi.deepgramToken(); } catch (e) { dbg("token throw " + (e&&e.message)); return; }
+  dbg("token ok=" + (tok && tok.ok) + " has=" + !!(tok && (tok.token || tok.key)) + " kind=" + (tok && tok.kind));
+  if (!tok || !tok.ok || !(tok.token || tok.key)) return; // sem streaming -> cai pro Whisper
+  const key = tok.token || tok.key;
+  const params = new URLSearchParams({
+    model: "nova-3", language: "multi", smart_format: "true", punctuate: "true",
+    interim_results: "true", encoding: "linear16", sample_rate: "16000", channels: "1",
+  });
+  try {
+    dgWs = new WebSocket(`wss://api.deepgram.com/v1/listen?${params.toString()}`, ["token", key]);
+  } catch (e) { dbg("ws ctor throw " + (e&&e.message)); dgWs = null; return; }
+  dgWs.binaryType = "arraybuffer";
+  let dgMsgCount = 0;
+
+  dgWs.onopen = () => {
+    dbg("ws OPEN");
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const src = ctx.createMediaStreamSource(stream);
+      const proc = ctx.createScriptProcessor(4096, 1, 1);
+      const mute = ctx.createGain(); mute.gain.value = 0; // evita eco no alto-falante
+      const inRate = ctx.sampleRate;
+      proc.onaudioprocess = (e) => {
+        if (!dgWs || dgWs.readyState !== 1) return;
+        const down = downsample(e.inputBuffer.getChannelData(0), inRate, 16000);
+        try { dgWs.send(floatTo16(down).buffer); } catch {}
+      };
+      src.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
+      dgPipe = { ctx, src, proc, mute };
+      dgActive = true;
+      dbg("pipe up rate=" + inRate);
+    } catch (e) { dgActive = false; dbg("pipe throw " + (e&&e.message)); }
+  };
+
+  dgWs.onmessage = (ev) => {
+    if (dgMsgCount < 3) { dbg("msg#" + dgMsgCount + " " + String(ev.data).slice(0, 90)); dgMsgCount++; }
+    if (state !== "recording" || userEdited) return;
+    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    const alt = m && m.channel && m.channel.alternatives && m.channel.alternatives[0];
+    const t = alt && (alt.transcript || "").trim();
+    if (!t) return;
+    if (m.is_final) {
+      dgFinalText = (dgFinalText ? dgFinalText + " " : "") + t;
+      liveText = dgFinalText;
+    } else {
+      liveText = (dgFinalText ? dgFinalText + " " : "") + t; // final acumulado + parcial
+    }
+    noteListening.hidden = true;
+    typeInto(liveText);
+  };
+  dgWs.onerror = () => { dbg("ws ERROR"); };
+  dgWs.onclose = (ev) => { dbg("ws CLOSE code=" + (ev && ev.code) + " reason=" + (ev && ev.reason)); dgActive = false; };
+}
+
+function dgStop() {
+  try { if (dgWs && dgWs.readyState === 1) dgWs.send(JSON.stringify({ type: "CloseStream" })); } catch {}
+  try {
+    if (dgPipe) {
+      dgPipe.proc.disconnect(); dgPipe.src.disconnect(); dgPipe.mute.disconnect();
+      dgPipe.ctx.close().catch(() => {});
+    }
+  } catch {}
+  dgPipe = null;
+  try { if (dgWs) dgWs.close(); } catch {}
+  dgWs = null;
+  dgActive = false;
+}
+
 function startTimer() {
   seconds = 0;
   recTimer.textContent = "0:00";
@@ -822,15 +915,21 @@ function finishXcribe() {
 
 async function finalizeTranscription() {
   if (micStream) micStream.getTracks().forEach((t) => t.stop());
-  let text = liveText || note.value;
-  try {
-    if (chunks.length) {
-      const blob = new Blob(chunks, { type: "audio/webm" });
-      const wav = await blobToWavBase64(blob);
-      const res = await window.capi.transcribe({ base64: wav, mime: "audio/wav" });
-      if (res && res.ok && res.text) text = res.text;
-    }
-  } catch {}
+  const hadDeepgram = !!dgFinalText;
+  let text = dgFinalText || liveText || note.value;
+  dgStop(); // encerra o streaming ao vivo
+  // Deepgram já entregou o texto ao vivo — não reprocessa no Whisper.
+  // Só usa o Whisper como backup quando o streaming não trouxe nada.
+  if (!hadDeepgram) {
+    try {
+      if (chunks.length) {
+        const blob = new Blob(chunks, { type: "audio/webm" });
+        const wav = await blobToWavBase64(blob);
+        const res = await window.capi.transcribe({ base64: wav, mime: "audio/wav" });
+        if (res && res.ok && res.text) text = res.text;
+      }
+    } catch {}
+  }
   // só sobrescreve se a pessoa não editou à mão
   if (!userEdited) {
     typeInto(text); // completa o texto final letra-a-letra (a partir do que já apareceu)
