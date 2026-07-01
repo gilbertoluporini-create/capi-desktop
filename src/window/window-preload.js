@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("capiWin", {
   openPanel: () => ipcRenderer.send("win:openPanel"),
   openScreenPrefs: () => ipcRenderer.send("win:openScreenPrefs"),
   openAxPrefs: () => ipcRenderer.send("win:openAxPrefs"),
+  openNotifPrefs: () => ipcRenderer.send("win:openNotifPrefs"),
   pickTarget: () => ipcRenderer.send("win:pickTarget"),
   removeTarget: (bundleId) => ipcRenderer.send("win:removeTarget", bundleId),
   setDefault: (bundleId) => ipcRenderer.send("win:setDefault", bundleId),

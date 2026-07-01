@@ -19,6 +19,7 @@ const {
 } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const { pathToFileURL } = require("url");
 const os = require("os");
 const { exec, execFile, execFileSync } = require("child_process");
 
@@ -290,13 +291,14 @@ function appProjects(app) {
   if (isCC) {
     for (const p of claudeProjectsCache) {
       const conv = `${p.sessions} conversation${p.sessions > 1 ? "s" : ""}`;
-      map.set(p.cwd, {
-        id: "cwd:" + p.cwd, key: p.cwd,
+      const k = p.key || p.cwd; // chave única por chat (pasta + título)
+      map.set(k, {
+        id: "cwd:" + k, key: k,
         name: p.title || p.name,
-        sub: p.title ? `${p.name} · ${conv}` : conv,
+        sub: p.title ? `${path.basename(p.cwd)} · ${conv}` : conv,
         // alvo de roteamento = TÍTULO do chat (aiTitle) p/ o `edt` achar a aba;
         // pasta (basename) só de fallback se não houver título
-        windowMatch: p.title || p.windowMatch, cwd: p.cwd, auto: true, agents: [],
+        windowMatch: p.title || p.windowMatch, cwd: p.cwd, mtime: p.mtime, auto: true, agents: [],
       });
     }
   }
@@ -342,7 +344,12 @@ function appProjects(app) {
       const hit = arr.find((p) => p.windowMatch && titlesMatch(p.windowMatch, fm.window));
       if (hit) hereKey = hit.key;
     }
-    if (!hereKey) hereKey = currentClaudeCwd();
+    if (!hereKey) {
+      // sem casar a janela ativa: marca o chat AUTO mais recente como "você está aqui"
+      let best = null;
+      for (const p of arr) if (p.auto && (!best || (p.mtime || 0) > (best.mtime || 0))) best = p;
+      if (best) hereKey = best.key;
+    }
   }
   const archived = new Set(config.archivedProjects || []);
   arr.forEach((p) => {
@@ -578,29 +585,35 @@ function listClaudeProjects() {
   const base = path.join(os.homedir(), ".claude", "projects");
   const files = [];
   walkJsonl(base, files, 0);
-  const byCwd = new Map(); // cwd -> { sessions, mtime }
+  // Agrupa por (pasta + TÍTULO do chat). Assim, vários chats que rodam da MESMA
+  // pasta (ex.: todos a partir da home) viram destinos SEPARADOS, cada um pelo seu
+  // título — em vez de colapsar tudo num projeto só.
+  const byChat = new Map(); // key -> { cwd, title, sessions, mtime }
   for (const file of files) {
     let m = 0;
     try { m = fs.statSync(file).mtimeMs; } catch {}
     const { cwds, title } = scanSession(file);
     for (const cwd of cwds) {
       if (cwd.startsWith("/private/tmp") || cwd.startsWith("/tmp")) continue; // worktrees
-      const cur = byCwd.get(cwd) || { sessions: 0, mtime: 0, title: null };
+      const key = cwd + "␟" + (title || "");
+      const cur = byChat.get(key) || { cwd, title: title || null, sessions: 0, mtime: 0 };
       cur.sessions += 1;
-      if (m > cur.mtime) { cur.mtime = m; if (title) cur.title = title; } // título do chat mais recente
-      byCwd.set(cwd, cur);
+      if (m > cur.mtime) cur.mtime = m;
+      byChat.set(key, cur);
     }
   }
-  return [...byCwd.entries()]
-    .map(([cwd, v]) => ({
-      cwd,
-      name: path.basename(cwd),
-      title: v.title || null, // nome do chat (aiTitle) mais recente nesse projeto
-      windowMatch: path.basename(cwd),
+  return [...byChat.entries()]
+    .map(([key, v]) => ({
+      key,
+      cwd: v.cwd,
+      name: v.title || path.basename(v.cwd),
+      title: v.title, // nome do chat (aiTitle)
+      windowMatch: v.title || path.basename(v.cwd), // alvo de roteamento = título da aba
       sessions: v.sessions,
       mtime: v.mtime,
     }))
-    .sort((a, b) => b.mtime - a.mtime);
+    .sort((a, b) => b.mtime - a.mtime)
+    .slice(0, 40); // só os chats mais recentes (evita despejar dezenas de antigos)
 }
 
 // título da JANELA ATIVA (AXMain) de um app — mesmo com a Capi na frente.
@@ -666,6 +679,10 @@ let mainWindow = null;
 let panelWindow = null; // janela do painel web (Conta/Faturas/Config), só sob demanda
 let loginWindow = null; // janela de login nativo (e-mail/senha via Supabase REST)
 let onboardingWindow = null; // janela de onboarding pós-login (escolher destino)
+let notifWindow = null; // telinha de notificação (agente respondeu) — canto da tela
+let notifTimer = null; // auto-dismiss da notificação
+let notifEndsAt = 0; // timestamp em que a notificação some (pra pausar/retomar)
+let lastSentTarget = null; // último destino enviado: { from, avatar, bundleId, urlMatch, web } — pro botão Responder
 let capturing = false;
 
 // ---------- Permissão de gravação de tela (macOS) ----------
@@ -875,6 +892,325 @@ function closeOverlay() {
   }
   overlayWindow = null;
   capturing = false;
+}
+
+// ---------- Telinha de notificação ("o agente respondeu") ----------
+// Toast no canto da tela: avatar de quem respondeu + trecho + Responder/Dispensar.
+// Some sozinho (com barra de tempo); pausa quando o mouse está em cima.
+const APP_ROOT = path.join(__dirname, "..", ".."); // .../desktop
+
+// resolve um avatar "img:../../assets/integrations/x.png" para file:// absoluto
+function avatarFileURL(av) {
+  if (!av || typeof av !== "string") return null;
+  const raw = av.replace(/^(img:|capi:)/, "").replace(/^(\.\.\/)+/, "");
+  if (!raw || /^https?:/i.test(raw)) return av.replace(/^(img:|capi:)/, "");
+  const abs = path.join(APP_ROOT, raw);
+  try {
+    if (!fs.existsSync(abs)) return null;
+  } catch {}
+  return pathToFileURL(abs).href;
+}
+
+function ensureNotifWindow() {
+  if (notifWindow && !notifWindow.isDestroyed()) return notifWindow;
+  const W = 384;
+  const H = 184;
+  const wa = screen.getPrimaryDisplay().workArea;
+  notifWindow = new BrowserWindow({
+    x: wa.x + wa.width - W - 14,
+    y: wa.y + 14,
+    width: W,
+    height: H,
+    frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    hasShadow: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    show: false,
+    // sem type:"panel" — a toast não precisa virar "key" (teclado); showInactive()
+    // já evita roubar foco do app onde a pessoa está.
+    webPreferences: {
+      preload: path.join(__dirname, "..", "notif", "notif-preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  notifWindow.setAlwaysOnTop(true, "screen-saver");
+  notifWindow.setVisibleOnAllWorkspaces(true, {
+    visibleOnFullScreen: true,
+    skipTransformProcessType: true,
+  });
+  notifWindow.loadFile(path.join(__dirname, "..", "notif", "notif.html"));
+  notifWindow.on("closed", () => {
+    notifWindow = null;
+    if (notifTimer) clearTimeout(notifTimer);
+    notifTimer = null;
+  });
+  return notifWindow;
+}
+
+function scheduleNotifDismiss(ms) {
+  if (notifTimer) clearTimeout(notifTimer);
+  notifEndsAt = Date.now() + ms;
+  notifTimer = setTimeout(() => dismissNotif(), ms);
+}
+
+// opts: { from, tag, text, avatar, duration, target } — target = pra onde o Responder leva
+function showNotif(opts = {}) {
+  const duration = opts.duration || 10000;
+  const win = ensureNotifWindow();
+  if (opts.target) lastSentTarget = opts.target;
+  const payload = {
+    from: opts.from || "Agente",
+    tag: opts.tag || "respondeu você",
+    text: opts.text || "",
+    avatar: avatarFileURL(opts.avatar) || null,
+    duration,
+  };
+  const send = () => {
+    if (!notifWindow || notifWindow.isDestroyed()) return;
+    notifWindow.showInactive(); // aparece SEM roubar foco
+    notifWindow.webContents.send("notif:show", payload);
+    scheduleNotifDismiss(duration);
+    flog("notif mostrada: from=" + payload.from + " avatar=" + (payload.avatar ? "ok" : "none"));
+  };
+  if (win.webContents.isLoading()) {
+    win.webContents.once("did-finish-load", send);
+  } else {
+    send();
+  }
+}
+
+function dismissNotif() {
+  if (notifTimer) clearTimeout(notifTimer);
+  notifTimer = null;
+  if (notifWindow && !notifWindow.isDestroyed()) notifWindow.hide();
+}
+
+// Responder: volta o foco pro agente que respondeu (aba do browser ou app nativo).
+async function notifReply() {
+  dismissNotif();
+  const t = lastSentTarget;
+  if (!t) return;
+  try {
+    if (t.web && t.urlMatch) {
+      await focusBrowserTab(t.urlMatch);
+    } else if (t.bundleId) {
+      await activateApp(t.bundleId);
+    }
+  } catch (e) {
+    flog("notifReply erro: " + (e.message || e));
+  }
+}
+
+ipcMain.on("notif:reply", () => notifReply());
+ipcMain.on("notif:dismiss", () => dismissNotif());
+ipcMain.on("notif:hold", (_e, on) => {
+  if (on) {
+    // mouse em cima → segura o auto-dismiss
+    if (notifTimer) clearTimeout(notifTimer);
+    notifTimer = null;
+  } else {
+    // mouse saiu → retoma com o tempo que sobrou (mín. 2s pra dar pra agir)
+    const remaining = Math.max(2000, notifEndsAt - Date.now());
+    scheduleNotifDismiss(remaining);
+  }
+});
+
+// ---------- Detecção de resposta do agente (vigia a janela e avisa) ----------
+// Depois de enviar, o Capi observa a JANELA do agente pelo buffer do sistema
+// (desktopCapturer — pega o conteúdo mesmo com a janela atrás de outras). Quando a
+// resposta PARA de mudar (terminou de escrever), dispara a telinha de notificação.
+// Não usa screencapture de tela (que falha entre Spaces). Precisa de screen recording
+// (o app já tem) e da janela não estar minimizada.
+let replyWatch = null; // { timer } — só um por vez
+
+// fração de pixels que mudaram entre dois bitmaps BGRA do mesmo tamanho (0..1)
+function bitmapDiffFraction(a, b) {
+  if (!a || !b || a.length !== b.length || a.length === 0) return 1;
+  const step = 4 * 12; // amostra 1 px a cada 12
+  let changed = 0;
+  let total = 0;
+  for (let i = 0; i + 2 < a.length; i += step) {
+    total++;
+    const d =
+      Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]);
+    if (d > 45) changed++;
+  }
+  return total ? changed / total : 0;
+}
+
+async function listWindowSources() {
+  try {
+    return await desktopCapturer.getSources({
+      types: ["window"],
+      thumbnailSize: { width: 300, height: 190 },
+      fetchWindowIcons: false,
+    });
+  } catch (e) {
+    flog("getSources erro: " + (e.message || e));
+    return [];
+  }
+}
+
+// acha a fonte da janela do agente: por id travado, senão por título, senão keywords
+function pickWindowSource(sources, { lockedId, title, keywords }) {
+  if (lockedId) {
+    const byId = sources.find((s) => s.id === lockedId);
+    if (byId) return byId;
+  }
+  const t = (title || "").trim().toLowerCase();
+  if (t) {
+    // exato
+    let s = sources.find((s) => (s.name || "").trim().toLowerCase() === t);
+    if (s) return s;
+    // bidirecional: o nome contém o título OU o título contém o nome (some sufixos
+    // tipo " — usuário" / " - Google Chrome" que aparecem só de um lado)
+    s = sources.find((s) => {
+      const n = (s.name || "").trim().toLowerCase();
+      if (!n || n.length < 4) return false;
+      return n.includes(t) || (t.length > 4 && t.includes(n));
+    });
+    if (s) return s;
+  }
+  const kws = (keywords || []).map((k) => String(k).toLowerCase()).filter(Boolean);
+  if (kws.length) {
+    const s = sources.find((s) => {
+      const n = (s.name || "").toLowerCase();
+      return kws.some((k) => n.includes(k));
+    });
+    if (s) return s;
+  }
+  return null;
+}
+
+// palavras-chave pra reencontrar a janela do agente caso o título mude
+function replyKeywords(from, url) {
+  const f = (from || "").toLowerCase();
+  const u = (url || "").toLowerCase();
+  const list = [];
+  if (f) list.push(f.split(" ")[0]);
+  if (/chatgpt|openai/.test(f + u)) list.push("chatgpt", "openai");
+  if (/gemini/.test(f + u)) list.push("gemini");
+  if (/claude/.test(f + u)) list.push("claude");
+  if (/perplexity/.test(f + u)) list.push("perplexity");
+  if (/cursor/.test(f)) list.push("cursor");
+  if (/code|vscode/.test(f)) list.push("visual studio code", "code");
+  return [...new Set(list)];
+}
+
+// título da aba ativa do browser (ancora a vigia mesmo se o foco voltar pro app de origem)
+async function frontTabTitle(browser) {
+  if (!browser) return null;
+  const lines =
+    browser === "Safari"
+      ? [`tell application "Safari" to return name of front document`]
+      : [`tell application "${browser}" to return title of active tab of front window`];
+  const { out } = await runOsa(lines, "x");
+  return out || null;
+}
+async function frontAppWindowTitle(bundleId) {
+  if (!bundleId) return null;
+  const lines = [
+    `tell application "System Events"`,
+    `  try`,
+    `    return name of front window of (first process whose bundle identifier is "${bundleId}")`,
+    `  end try`,
+    `end tell`,
+  ];
+  const { out } = await runOsa(lines, "x");
+  return out || null;
+}
+
+let replyWatchGen = 0; // aborta loops de busca obsoletos quando vem outro envio
+
+function stopReplyWatch() {
+  if (replyWatch && replyWatch.timer) clearInterval(replyWatch.timer);
+  replyWatch = null;
+  replyWatchGen++;
+}
+
+// vigia a janela do agente; quando a resposta PARA de mudar, dispara a notificação.
+// opts: { title, keywords, from, avatar, target }
+async function watchForReply(opts = {}) {
+  if (process.platform !== "darwin") return;
+  stopReplyWatch(); // um envio por vez
+  const myGen = replyWatchGen;
+  const { title, keywords, from, avatar, target } = opts;
+
+  // procura a janela do agente por até ~22s (ela pode demorar a ficar "capturável"
+  // — ex.: você volta pra Área de Trabalho dela). Aborta se vier outro envio.
+  let src0 = null;
+  for (let attempt = 0; attempt < 15; attempt++) {
+    if (replyWatchGen !== myGen) return; // substituído
+    const sources0 = await listWindowSources();
+    const cand = pickWindowSource(sources0, { title, keywords });
+    if (cand && cand.thumbnail && !cand.thumbnail.isEmpty()) {
+      src0 = cand;
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  if (replyWatchGen !== myGen) return;
+  if (!src0) {
+    flog(
+      "replyWatch: janela do agente não encontrada após ~22s (" +
+        (from || "?") +
+        ", title=" +
+        JSON.stringify(title || "") +
+        ") — provável Space diferente/minimizada"
+    );
+    return;
+  }
+  const lockedId = src0.id;
+  let prev = src0.thumbnail.toBitmap();
+  let started = false;
+  let stable = 0;
+  let ticks = 0;
+  const POLL = 1500;
+  const START_TIMEOUT = 70; // ~105s pro agente começar
+  const HARD_STOP = 220; // ~5,5min teto
+  const STABLE_NEEDED = 2; // ~3s parado após mexer = pronto
+  flog('replyWatch: vigiando "' + (src0.name || "") + '" (' + (from || "?") + ")");
+
+  const watch = { timer: null };
+  replyWatch = watch;
+  watch.timer = setInterval(async () => {
+    if (replyWatch !== watch) return; // substituído por outro envio
+    ticks++;
+    const sources = await listWindowSources();
+    const src = pickWindowSource(sources, { lockedId, title, keywords });
+    if (!src || !src.thumbnail || src.thumbnail.isEmpty()) {
+      if (ticks > 4 && !started) stopReplyWatch(); // janela sumiu/minimizou
+      return;
+    }
+    const cur = src.thumbnail.toBitmap();
+    const diff = bitmapDiffFraction(prev, cur);
+    prev = cur;
+    if (diff > 0.01) {
+      started = true;
+      stable = 0;
+    } else if (started) {
+      stable++;
+      if (stable >= STABLE_NEEDED) {
+        stopReplyWatch();
+        showNotif({ from, avatar, tag: "respondeu você", text: "", duration: 10000, target });
+        flog("replyWatch: resposta detectada → notificou (" + (from || "?") + ")");
+        return;
+      }
+    }
+    if (!started && ticks >= START_TIMEOUT) {
+      stopReplyWatch();
+      flog("replyWatch: timeout sem início (" + (from || "?") + ")");
+    }
+    if (ticks >= HARD_STOP) stopReplyWatch();
+  }, POLL);
 }
 
 // qual app estava na frente quando o atalho foi disparado (pra colar de volta nele)
@@ -1918,8 +2254,37 @@ ipcMain.on("login:cancel", () => {
 // IPC do overlay: abrir login / abrir pagamento (a partir do paywall)
 ipcMain.on("overlay:openLogin", () => openLoginWindow());
 ipcMain.on("overlay:openPay", (_e, payUrl) => {
-  shell.openExternal(payUrl || buildPayUrl());
+  closeOverlay();          // fecha a telinha do paywall
+  openPayWindow(payUrl);   // checkout DENTRO do Capi (mesma Space — não arranca pro browser)
 });
+
+// Janela de checkout do próprio Capi: abre o Stripe numa BrowserWindow na Space
+// atual, em vez de jogar no browser externo (que pode estar em tela cheia noutra
+// Space e "puxar" o usuário pra lá).
+let payWindow = null;
+function openPayWindow(payUrl) {
+  const url = payUrl || buildPayUrl();
+  if (payWindow && !payWindow.isDestroyed()) {
+    payWindow.show(); payWindow.focus(); payWindow.loadURL(url);
+    return;
+  }
+  payWindow = new BrowserWindow({
+    width: 460, height: 720,
+    resizable: false, fullscreenable: false, minimizable: true, maximizable: false,
+    title: "Capi Pro", backgroundColor: "#ffffff",
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+    webPreferences: { contextIsolation: true, nodeIntegration: false },
+  });
+  if (process.platform === "darwin" && app.dock) { app.dock.show(); setDockIcon(); }
+  payWindow.loadURL(url);
+  // links que o Stripe tenta abrir em nova aba (termos, etc.) vão pro browser
+  payWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: "deny" };
+  });
+  payWindow.on("closed", () => { payWindow = null; });
+  payWindow.show();
+}
 
 // ---------- Onboarding (1ª vez, pós-login) — escolher destino ----------
 // checa se um app está instalado pelo bundle id (sem abrir nada)
@@ -2046,6 +2411,21 @@ ipcMain.on("onboarding:openPerm", (_e, which) => {
     shell.openExternal(
       "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
     );
+  } else if (which === "notif") {
+    // dispara uma notificação de teste do Capi → registra o app na lista de
+    // Notificações do macOS (e mostra um exemplo) + abre o painel certo.
+    try {
+      if (Notification.isSupported()) {
+        new Notification({
+          title: "Capi 🦫 — notifications on!",
+          body: "You'll get a heads-up like this when your agent replies.",
+          silent: false,
+        }).show();
+      }
+    } catch (_) {}
+    shell.openExternal(
+      "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+    );
   }
 });
 
@@ -2149,6 +2529,21 @@ ipcMain.on("win:openAxPrefs", () => {
   systemPreferences.isTrustedAccessibilityClient(true);
   shell.openExternal(
     "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+  );
+});
+ipcMain.on("win:openNotifPrefs", () => {
+  // dispara uma notificação de teste (registra o Capi na lista) + abre o painel
+  try {
+    if (Notification.isSupported()) {
+      new Notification({
+        title: "Capi 🦫 — notifications on!",
+        body: "You'll get a heads-up like this when your agent replies.",
+        silent: false,
+      }).show();
+    }
+  } catch (_) {}
+  shell.openExternal(
+    "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
   );
 });
 
@@ -2352,7 +2747,8 @@ ipcMain.on("perm:result", (_e, r) => {
   refreshTrayMenu();
 });
 
-ipcMain.on("win:openPanel", () => openPanelWindow());
+// Account panel abre o dashboard NO NAVEGADOR (não no pop-up nativo do Capi).
+ipcMain.on("win:openPanel", () => shell.openExternal(`${WEB_URL}/dashboard`));
 
 ipcMain.on("overlay:cancel", () => closeOverlay());
 
@@ -2563,6 +2959,39 @@ ipcMain.handle("overlay:commit", async (_evt, payload) => {
           " tabMissed=" +
           tabMissed
       );
+      // memoriza pra onde acabamos de mandar — o botão "Responder" da notificação
+      // leva de volta a esse destino (aba do browser ou app nativo).
+      if (pasted) {
+        const effUrl = urlMatch || WEB_URLMATCH_BY_BUNDLE[bundle] || null;
+        const dest = flattenDestinations().find(
+          (d) => (bundle && d.bundleId === bundle) || (effUrl && d.urlMatch === effUrl)
+        );
+        lastSentTarget = {
+          from: (dest && dest.name) || (bundle || "o agente"),
+          avatar: dest && dest.avatar,
+          bundleId: isWeb ? null : bundle,
+          urlMatch: isWeb ? effUrl : null,
+          web: isWeb,
+        };
+        // liga a vigia de resposta (não pra mensageiros — lá "resposta" é a pessoa).
+        if (!MESSENGER_BUNDLES.has(bundle)) {
+          const kw = replyKeywords(lastSentTarget.from, effUrl);
+          (async () => {
+            let title = null;
+            try {
+              if (isWeb) title = await frontTabTitle(res.browser);
+              else if (bundle) title = await frontAppWindowTitle(bundle);
+            } catch {}
+            watchForReply({
+              title,
+              keywords: kw,
+              from: lastSentTarget.from,
+              avatar: lastSentTarget.avatar,
+              target: lastSentTarget,
+            });
+          })();
+        }
+      }
     } else if (config.autoPaste && process.platform === "win32") {
       const isLast = !targetBundle || targetBundle === "__last__";
       const res = await runPasteWindows({
@@ -2783,7 +3212,7 @@ function refreshTrayMenu() {
     },
     {
       label: "Account panel…",
-      click: () => openPanelWindow(),
+      click: () => shell.openExternal(`${WEB_URL}/dashboard`),
     },
     {
       label: "Set up destination…",

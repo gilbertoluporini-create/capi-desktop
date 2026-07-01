@@ -1,6 +1,6 @@
 {
   "name": "capi-desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Capi — captura de tela + contexto direto pro clipboard do seu agente",
   "main": "src/main/main.js",
   "author": "Gilberto Luporini",
@@ -8,7 +8,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "dist": "electron-builder --mac dmg"
+    "dist": "electron-builder --mac dmg",
+    "dist:win": "electron-builder --win nsis"
   },
   "build": {
     "appId": "com.luporini.capi",
@@ -37,8 +38,7 @@
       "target": [
         "nsis"
       ],
-      "icon": "assets/capi-app-icon.png",
-      "signtoolOptions": null
+      "icon": "assets/capi-app-icon.png"
     },
     "nsis": {
       "oneClick": false,
@@ -55,8 +55,17 @@
         "height": 380
       },
       "contents": [
-        { "x": 140, "y": 185, "type": "file" },
-        { "x": 400, "y": 185, "type": "link", "path": "/Applications" }
+        {
+          "x": 140,
+          "y": 185,
+          "type": "file"
+        },
+        {
+          "x": 400,
+          "y": 185,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     }
   },

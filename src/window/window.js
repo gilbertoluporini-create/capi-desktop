@@ -450,8 +450,14 @@ $("openPanelBtn")?.addEventListener("click", () => window.capiWin.openPanel());
   $("opt-" + key).addEventListener("change", (e) => window.capiWin.setOption(key, e.target.checked)));
 document.querySelectorAll(".mini").forEach((b) =>
   b.addEventListener("click", () => {
-    if (b.dataset.act === "screen") window.capiWin.openScreenPrefs();
-    else window.capiWin.openAxPrefs();
+    const act = b.dataset.act;
+    if (act === "screen") window.capiWin.openScreenPrefs();
+    else if (act === "notif") {
+      window.capiWin.openNotifPrefs();
+      // notificações não têm API de status — marca como ativada após o clique
+      const row = $("perm-notif");
+      if (row) { row.classList.add("ok"); row.classList.remove("no"); }
+    } else window.capiWin.openAxPrefs();
   }));
 $("cdef-last").addEventListener("change", () => window.capiWin.setAgentDefault("__last__"));
 

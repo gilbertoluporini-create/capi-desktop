@@ -625,10 +625,20 @@ async function startRecording() {
     mediaRecorder.onstop = finalizeTranscription;
     mediaRecorder.start(2000);
   } catch (e) {
+    const name = (e && e.name) || "";
+    const isWin = navigator.userAgent.includes("Windows");
     recLabel.textContent = "No microphone";
     setMicRecording(false);
     noteListening.hidden = true;
-    setStatus("No microphone access — you can type instead");
+    let msg = "No microphone access — you can type instead";
+    if (name === "NotAllowedError" || name === "SecurityError" || name === "NotReadableError") {
+      msg = isWin
+        ? "Windows is blocking the mic. Open Settings › Privacy › Microphone and turn on “Let desktop apps access your microphone”. Or just type."
+        : "Mic permission denied — enable it in system settings, or type instead.";
+    } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+      msg = "No microphone found — plug one in, or type instead.";
+    }
+    setStatus(msg);
     enterPicking(true);
   }
 }

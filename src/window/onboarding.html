@@ -181,6 +181,14 @@
           </span>
           <button class="permbtn" data-perm="mic">Enable</button>
         </div>
+        <div class="opt" id="row-notif">
+          <span class="ico">🔔</span>
+          <span class="txt">
+            <span class="ttl"><span class="pdot" id="dot-notif">●</span> Notifications <span style="color:var(--muted);font-weight:400">(optional)</span></span>
+            <span class="desc">to get alerted when your agent replies</span>
+          </span>
+          <button class="permbtn" data-perm="notif">Enable</button>
+        </div>
       </div>
       <div class="guide" id="perms-tip" style="margin-top:14px">
         <h3>How it works</h3>
@@ -342,7 +350,11 @@
         } catch (_) {}
       }
       document.querySelectorAll("#step-perms .permbtn").forEach((b) => {
-        b.addEventListener("click", () => ob.openPerm(b.dataset.perm));
+        b.addEventListener("click", () => {
+          ob.openPerm(b.dataset.perm);
+          // notificações não têm API de status — marca como ativada após o clique
+          if (b.dataset.perm === "notif") setTimeout(() => paintPerm("notif", true), 800);
+        });
       });
       document.getElementById("perms-continue").addEventListener("click", () => show("pick"));
       document.getElementById("perms-skip").addEventListener("click", () => show("pick"));
